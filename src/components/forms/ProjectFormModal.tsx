@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { Input, Select, Textarea } from '../Input';
-import type { Client, Project, ProjectStatus } from '../../types/database';
+import type { BillingType, Client, Project, ProjectStatus } from '../../types/database';
 
 interface ProjectFormModalProps {
   open: boolean;
@@ -14,6 +14,9 @@ interface ProjectFormModalProps {
     status: ProjectStatus;
     start_date: string | null;
     due_date: string | null;
+    repo_url: string | null;
+    billing_type: BillingType;
+    hourly_rate: number | null;
   }) => Promise<void>;
   clients: Client[];
   initialProject?: Project | null;
@@ -27,6 +30,9 @@ export function ProjectFormModal({ open, onClose, onSubmit, clients, initialProj
   const [status, setStatus] = useState<ProjectStatus>('PLANNING');
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [repoUrl, setRepoUrl] = useState('');
+  const [billingType, setBillingType] = useState<BillingType>('HOURLY');
+  const [hourlyRate, setHourlyRate] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,6 +43,9 @@ export function ProjectFormModal({ open, onClose, onSubmit, clients, initialProj
       setStatus(initialProject?.status ?? 'PLANNING');
       setStartDate(initialProject?.start_date ?? '');
       setDueDate(initialProject?.due_date ?? '');
+      setRepoUrl(initialProject?.repo_url ?? '');
+      setBillingType(initialProject?.billing_type ?? 'HOURLY');
+      setHourlyRate(initialProject?.hourly_rate != null ? String(initialProject.hourly_rate) : '');
       setError(null);
     }
   }, [open, initialProject]);
@@ -54,6 +63,9 @@ export function ProjectFormModal({ open, onClose, onSubmit, clients, initialProj
       status,
       start_date: startDate || null,
       due_date: dueDate || null,
+      repo_url: repoUrl.trim() || null,
+      billing_type: billingType,
+      hourly_rate: billingType === 'HOURLY' && hourlyRate ? Number(hourlyRate) : null,
     });
   }
 
@@ -92,6 +104,29 @@ export function ProjectFormModal({ open, onClose, onSubmit, clients, initialProj
       <div className="two-col">
         <Input label="Fecha de inicio" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         <Input label="Fecha limite" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+      </div>
+      <Input
+        label="Repositorio"
+        type="url"
+        value={repoUrl}
+        onChange={(e) => setRepoUrl(e.target.value)}
+        placeholder="https://github.com/miselium/proyecto"
+      />
+      <div className="two-col">
+        <Select label="Tipo de facturacion" value={billingType} onChange={(e) => setBillingType(e.target.value as BillingType)}>
+          <option value="HOURLY">Por hora</option>
+          <option value="FIXED">Precio fijo</option>
+        </Select>
+        <Input
+          label="Tarifa por hora"
+          type="number"
+          min="0"
+          step="0.01"
+          value={hourlyRate}
+          onChange={(e) => setHourlyRate(e.target.value)}
+          disabled={billingType !== 'HOURLY'}
+          placeholder="Ej. 25.00"
+        />
       </div>
       {error && <div className="field-error">{error}</div>}
     </Modal>

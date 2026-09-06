@@ -1,4 +1,4 @@
-import { Calendar } from 'lucide-react';
+import { Calendar, Clock } from 'lucide-react';
 import type { Task } from '../types/database';
 import { Badge, isOverdue, priorityColor, priorityLabel, taskStatusColor, taskStatusLabel } from './Badge';
 
@@ -8,12 +8,14 @@ interface TaskItemProps {
   assigneeName?: string;
   onStatusChange?: (status: Task['status']) => void;
   showProject?: boolean;
+  loggedHours?: number;
+  onClick?: () => void;
 }
 
-export function TaskItem({ task, projectName, assigneeName, onStatusChange, showProject }: TaskItemProps) {
+export function TaskItem({ task, projectName, assigneeName, onStatusChange, showProject, loggedHours, onClick }: TaskItemProps) {
   const overdue = isOverdue(task.due_date, task.status);
   return (
-    <div className="task-item">
+    <div className={`task-item ${onClick ? 'task-item-clickable' : ''}`} onClick={onClick}>
       <div className="task-item-main">
         <div className="task-item-title">{task.title}</div>
         <div className="task-item-meta">
@@ -22,6 +24,11 @@ export function TaskItem({ task, projectName, assigneeName, onStatusChange, show
           {task.due_date && (
             <span className="flex items-center gap-1" style={overdue ? { color: 'var(--color-red-text)' } : undefined}>
               <Calendar size={12} /> {task.due_date}
+            </span>
+          )}
+          {!!loggedHours && (
+            <span className="flex items-center gap-1">
+              <Clock size={12} /> {loggedHours}h registradas
             </span>
           )}
         </div>

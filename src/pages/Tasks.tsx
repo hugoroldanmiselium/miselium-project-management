@@ -5,6 +5,7 @@ import { Table, type Column } from '../components/Table';
 import { LoadingState, ErrorState, EmptyState } from '../components/States';
 import { Badge, isOverdue, priorityColor, priorityLabel, taskStatusColor, taskStatusLabel } from '../components/Badge';
 import { TaskFormModal } from '../components/forms/TaskFormModal';
+import { TaskDetailModal } from '../components/TaskDetailModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { createTask, fetchProfiles, fetchProjects, fetchTasks, logActivity, updateTaskStatus } from '../lib/queries';
@@ -15,6 +16,7 @@ export function Tasks() {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'ALL' | TaskStatus>('ALL');
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
 
   const { data: tasks, loading, error, refetch } = useSupabaseQuery(() => fetchTasks());
   const { data: projects } = useSupabaseQuery(() => fetchProjects());
@@ -110,7 +112,9 @@ export function Tasks() {
       {!loading && !error && filtered.length === 0 && (
         <EmptyState title="Sin tareas" description="No hay tareas que coincidan con este filtro." />
       )}
-      {!loading && !error && filtered.length > 0 && <Table columns={columns} rows={filtered} rowKey={(t) => t.id} />}
+      {!loading && !error && filtered.length > 0 && (
+        <Table columns={columns} rows={filtered} rowKey={(t) => t.id} onRowClick={(t) => setActiveTask(t)} />
+      )}
 
       <TaskFormModal
         open={modalOpen}
@@ -119,6 +123,15 @@ export function Tasks() {
         projects={projects ?? []}
         profiles={profiles ?? []}
         submitting={submitting}
+      />
+      <TaskDetailModal
+        open={!!activeTask}
+        onClose={() => setActiveTask(null)}
+        task={activeTask}
+        projectName={activeTask ? projectMap.get(activeTask.project_id) : undefined}
+        assigneeName={activeTask ? profileMap.get(activeTask.assigned_to ?? '') : undefined}
+        profiles={profiles ?? []}
+        onChanged={refetch}
       />
     </div>
   );

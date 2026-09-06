@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, UserPlus } from 'lucide-react';
+import { ExternalLink, Plus, Pencil, Trash2, UserPlus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import {
@@ -13,6 +13,7 @@ import {
   fetchProject,
   fetchProjectMembers,
   fetchTasksForProject,
+  fetchTimeEntriesForTasks,
   logActivity,
   removeProjectMember,
   updateProject,
@@ -22,12 +23,13 @@ import { LoadingState, ErrorState, NotFoundState, EmptyState } from '../componen
 import { Badge, projectStatusColor, projectStatusLabel } from '../components/Badge';
 import { ProjectProgress, computeProgress } from '../components/ProjectProgress';
 import { TaskItem } from '../components/TaskItem';
+import { TaskDetailModal } from '../components/TaskDetailModal';
 import { Button } from '../components/Button';
 import { Select } from '../components/Input';
 import { ProjectFormModal } from '../components/forms/ProjectFormModal';
 import { TaskFormModal } from '../components/forms/TaskFormModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import type { TaskStatus } from '../types/database';
+import type { Task, TaskStatus } from '../types/database';
 
 type Tab = 'tasks' | 'team' | 'activity';
 
@@ -41,6 +43,7 @@ export function ProjectDetail() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [addMemberId, setAddMemberId] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
 
   const { data: project, loading, error, refetch } = useSupabaseQuery(() => fetchProject(id!), [id]);
   const { data: clients } = useSupabaseQuery(() => fetchClients());
@@ -48,6 +51,11 @@ export function ProjectDetail() {
   const { data: members, refetch: refetchMembers } = useSupabaseQuery(() => fetchProjectMembers(id!), [id]);
   const { data: activity } = useSupabaseQuery(() => fetchActivityForProject(id!), [id, tab]);
   const { data: profiles } = useSupabaseQuery(() => fetchProfiles());
+  const taskIds = useMemo(() => (tasks ?? []).map((t) => t.id), [tasks]);
+  const {
+    data: timeEntries,
+    refetch: refetchTimeEntries,
+  } = useSupabaseQuery(() => fetchTimeEntriesForTasks(taskIds), [taskIds.join(',')]);
 
   const clientName = useMemo(
     () => clients?.find((c) => c.id === project?.client_id)?.name,
@@ -62,6 +70,22 @@ export function ProjectDetail() {
     [profiles, members]
   );
   const progress = computeProgress(tasks ?? []);
+
+  const hoursByTask = useMemo(() => {
+    const map = new Map<string, number>();
+    (timeEntries ?? []).forEach((e) => {
+      map.set(e.task_id, (map.get(e.task_id) ?? 0) + Number(e.hours));
+    });
+    return map;
+  }, [timeEntries]);
+  const totalProjectHours = useMemo(
+    () => (timeEntries ?? []).reduce((sum, e) => sum + Number(e.hours), 0),
+    [timeEntries]
+  );
+  const billingTotal =
+    project?.billing_type === 'HOURLY' && project.hourly_rate != null
+      ? Math.round(totalProjectHours * project.hourly_rate * 100) / 100
+      : null;
 
   if (loading) return <LoadingState label="Cargando proyecto..." />;
   if (error) return <ErrorState description={error} onRetry={refetch} />;
@@ -119,6 +143,17 @@ export function ProjectDetail() {
             <Badge color={projectStatusColor(project.status)}>{projectStatusLabel(project.status)}</Badge>
           </div>
           <p className="text-secondary">{clientName ?? 'Sin cliente asignado'}</p>
+          {project.repo_url && (
+            <a
+              className="repo-link mt-2"
+              href={project.repo_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: 'inline-flex' }}
+            >
+              <ExternalLink size={13} /> Repositorio
+            </a>
+          )}
         </div>
         {isAdmin && (
           <div className="flex gap-2">
@@ -156,6 +191,38 @@ export function ProjectDetail() {
         </div>
       </div>
 
+      <div className="two-col mb-6">
+        <div className="card card-padded">
+          <h3 className="mb-2">Facturacion</h3>
+          <div className="info-row">
+            <span className="info-row-label">Tipo</span>
+            <span>{project.billing_type === 'HOURLY' ? 'Por hora' : 'Precio fijo'}</span>
+          </div>
+          {project.billing_type === 'HOURLY' ? (
+            <>
+              <div className="info-row">
+                <span className="info-row-label">Tarifa</span>
+                <span>{project.hourly_rate != null ? `$${project.hourly_rate}/h` : 'Sin definir'}</span>
+              </div>
+              <div className="info-row">
+                <span className="info-row-label">Total estimado</span>
+                <span style={{ fontWeight: 600 }}>{billingTotal != null ? `$${billingTotal}` : '—'}</span>
+              </div>
+            </>
+          ) : (
+            <div className="text-small text-muted mt-2">Precio fijo, sin calculo por hora.</div>
+          )}
+        </div>
+        <div className="card card-padded">
+          <h3 className="mb-2">Tiempo registrado</h3>
+          <div className="info-row">
+            <span className="info-row-label">Total del proyecto</span>
+            <span style={{ fontWeight: 600 }}>{totalProjectHours}h</span>
+          </div>
+          <div className="text-small text-muted mt-2">Suma de horas registradas en todas las tareas del proyecto.</div>
+        </div>
+      </div>
+
       <div className="tabs">
         <div className={`tab ${tab === 'tasks' ? 'active' : ''}`} onClick={() => setTab('tasks')}>
           Tareas
@@ -189,7 +256,9 @@ export function ProjectDetail() {
                   key={t.id}
                   task={t}
                   assigneeName={assignee?.name}
+                  loggedHours={hoursByTask.get(t.id)}
                   onStatusChange={canEditStatus ? (status) => handleStatusChange(t.id, status) : undefined}
+                  onClick={() => setActiveTask(t)}
                 />
               );
             })
@@ -285,6 +354,18 @@ export function ProjectDetail() {
         loading={submitting}
         onConfirm={handleDeleteProject}
         onCancel={() => setConfirmDeleteOpen(false)}
+      />
+      <TaskDetailModal
+        open={!!activeTask}
+        onClose={() => setActiveTask(null)}
+        task={activeTask}
+        projectName={project.name}
+        assigneeName={profiles?.find((p) => p.id === activeTask?.assigned_to)?.name}
+        profiles={profiles ?? []}
+        onChanged={() => {
+          refetchTasks();
+          refetchTimeEntries();
+        }}
       />
     </div>
   );
