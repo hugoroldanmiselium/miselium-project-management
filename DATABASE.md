@@ -12,6 +12,9 @@ under `supabase/migrations/`:
 - `004_replace_demo_users.sql` — swaps placeholder demo accounts for the real team accounts
 - `005_agency_features.sql` — time tracking, project `repo_url`/billing columns, in-app
   notifications (+ assignment trigger), task comments — see "Agency features" below
+- `006_task_estimation_capacity.sql` — `tasks.estimated_hours`, `profiles.daily_available_hours`,
+  plus the RLS policy change needed to protect the new profile column — see "Task estimation +
+  daily capacity" below
 
 ## Tables
 
@@ -25,6 +28,7 @@ Mirrors `auth.users` 1:1 (`id` references `auth.users.id`, cascade delete).
 | email      | text      |                                      |
 | role       | text      | `'ADMIN' \| 'DEVELOPER'`, checked   |
 | created_at | timestamptz |                                    |
+| daily_available_hours | numeric(4,2) | added in `006`; nullable, `check (daily_available_hours is null or (daily_available_hours > 0 and daily_available_hours <= 24))` |
 
 ### `clients`
 | column        | type    |
@@ -78,6 +82,7 @@ Primary key: `(project_id, user_id)`. Indexes on both FK columns individually as
 | due_date    | date    |
 | created_at  | timestamptz |
 | updated_at  | timestamptz | auto-updated via `set_updated_at()` trigger |
+| estimated_hours | numeric(5,2) | added in `006`; nullable, `check (estimated_hours is null or estimated_hours >= 0)` |
 
 Indexes: `project_id`, `assigned_to`, `status`.
 
@@ -139,6 +144,27 @@ an assignee, or an existing task's `assigned_to` changes, inserts a `notificatio
 new assignee — unless the assignee is the one making the change (`auth.uid()`). Security definer
 is required because RLS on `notifications` otherwise only lets a user write their own rows.
 
+## Task estimation + daily capacity (`006_task_estimation_capacity.sql`)
+
+Pure data fields with simple aggregate display only — not a scheduling/workload algorithm, not
+actual-hours timesheets (that's the pre-existing `time_entries` feature, left untouched), not
+auto-assignment, not capacity calendars.
+
+- `tasks.estimated_hours` (`numeric(5,2)`, nullable) — existing tasks were left `NULL` rather than
+  backfilled with an invented value. The DB check constraint only requires `>= 0` (a legitimate
+  0-hour placeholder task is never rejected by Postgres); the "should be greater than 0" rule from
+  the spec is enforced only in `TaskFormModal`'s create-time validation, not at the DB level.
+- `profiles.daily_available_hours` (`numeric(4,2)`, nullable, `check (> 0 and <= 24)`) — existing
+  users were left `NULL` rather than backfilled with a fake value. Editable only by ADMIN (Team
+  page, inline input in the "Disponibilidad" column) — enforced by RLS, not just UI hiding; see
+  `SECURITY.md`.
+- RLS change: `profiles_update_self_name` was extended so a user updating their own `name` can no
+  longer sneak a change to `daily_available_hours` into the same request (the existing `role`
+  self-protection is untouched, just joined by the same technique for the new column).
+  `tasks_update` was left unchanged — a developer editing their own assigned task can also set its
+  `estimated_hours`, since Postgres RLS is table-level and nothing column-specific was layered on
+  top.
+
 ## Seed data
 
 Clients: ALTUM, RD Consultorio Fiscal, Mayacorptrips, Cliente Demo.
@@ -183,7 +209,8 @@ curl -s -X POST \
   "https://api.supabase.com/v1/projects/<project-ref>/database/query"
 ```
 
-(repeat for `002_rls.sql`, then `003_seed.sql`). All three files are idempotent-ish — schema uses
+(repeat for `002_rls.sql`, then `003_seed.sql`, `004_replace_demo_users.sql`, `005_agency_features.sql`,
+`006_task_estimation_capacity.sql`, in order). All files are idempotent-ish — schema uses
 `create table if not exists` / `create index if not exists`, RLS policies use `drop policy if
 exists` before `create policy`, and seed inserts guard with `where not exists (...)` — so they
 can be safely re-run without duplicating data (though re-running against a project that already

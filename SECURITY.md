@@ -25,7 +25,7 @@ policies on `profiles`/`project_members` querying themselves:
 
 | Table            | SELECT                                              | INSERT/UPDATE/DELETE |
 |------------------|------------------------------------------------------|------------------------|
-| `profiles`       | any authenticated user (needed for assignee names, team page — no sensitive data in this table) | only ADMIN can insert/delete/change role; a user can update their own `name` but a `with check` clause blocks changing their own `role` |
+| `profiles`       | any authenticated user (needed for assignee names, team page — no sensitive data in this table, including `daily_available_hours`) | only ADMIN can insert/delete/change role or `daily_available_hours`; a user can update their own `name` but a `with check` clause blocks changing their own `role` or `daily_available_hours` |
 | `clients`        | ADMIN, or DEVELOPER whose project(s) belong to that client | ADMIN only |
 | `projects`       | ADMIN, or DEVELOPER who is a `project_members` row for that project | ADMIN only |
 | `project_members`| ADMIN, the member themself, or any member of that project | ADMIN only |
@@ -105,6 +105,41 @@ test rows were deleted afterward.
 2. Gerardo commented on Nikte's task in a project he does not belong to — **rejected** with the
    same `42501` RLS error.
 
+## Task estimation + daily capacity (v0.3) — live-tested RLS results
+
+`006_task_estimation_capacity.sql` adds `tasks.estimated_hours` and `profiles.daily_available_hours`
+(see `DATABASE.md`). No new tables, so no new helper functions — just one extended policy:
+`profiles_update_self_name`'s `with check` clause now also requires `daily_available_hours` to be
+unchanged, using the same "compare against the currently-stored value" technique already used to
+block self-role-changes. `tasks_update` and `profiles_update_admin`/`profiles_select` were left
+untouched (RLS is table-level, and the existing table-level rules already cover the new columns
+correctly).
+
+Tested end-to-end against the live project using real JWTs for `hugo@miselium.local` (ADMIN) and
+`gerardo@miselium.local` (DEVELOPER) via `POST /auth/v1/token?grant_type=password`, then direct
+REST calls:
+
+1. Gerardo `PATCH /rest/v1/profiles?email=eq.gerardo@miselium.local` with
+   `{"daily_available_hours": 9}` (attempting to set his own capacity) — **rejected**,
+   `42501 new row violates row-level security policy for table "profiles"`, HTTP 403.
+2. Hugo (ADMIN) `PATCH /rest/v1/profiles?email=eq.gerardo@miselium.local` with
+   `{"daily_available_hours": 7}` — **succeeded**, HTTP 200, value persisted.
+3. Gerardo `PATCH /rest/v1/tasks?id=eq.<a task assigned to him>` with `{"estimated_hours": 5}` —
+   **succeeded**, HTTP 200 — confirming the deliberate choice to let a developer adjust the
+   estimate on their own assigned task (unchanged `tasks_update` policy), not just an ADMIN.
+
+Judgment calls made where the spec left room:
+- **Dashboard "Capacidad diaria" role-scoping**: ADMIN sees the whole team's summed daily capacity
+  (consistent with every other ADMIN-facing stat on the dashboard being team-wide); a DEVELOPER
+  sees only their own value, matching the Team page's existing `canSeeWorkload` per-user scoping
+  rather than exposing teammates' numbers on the dashboard.
+- **Developer editing their own task's estimate**: allowed, via the unchanged `tasks_update`
+  policy — the spec doesn't restrict estimation to ADMIN-only, and it lives in the same shared
+  create/edit form as every other task field a developer can already touch for their own tasks.
+- **`estimated_hours` 0-vs-required-positive**: the DB check constraint allows `>= 0` (never
+  rejects a legitimate 0-hour placeholder row); "must be > 0" is enforced only in the create-task
+  form's client-side validation, per the spec's own preference for flexibility at the DB layer.
+
 One implementation detail worth calling out: the `time_entries` INSERT policy originally checked
 "is this task assigned to me" with a plain SQL subquery against `tasks`, which is itself subject
 to `tasks`'s own RLS (`tasks_select`). That subquery correctly returns nothing (and the insert is
@@ -156,3 +191,12 @@ invalid values are rejected by Postgres even if the frontend validation were byp
 - Billing visibility is read-only math (hours logged x rate for hourly projects); there is no
   invoice generation, payment tracking, or editable line items.
 - No webhook/commit integration for the repo link — it's a plain URL field.
+
+## Known limitations / out of scope for v0.3 (task estimation + daily capacity)
+
+- `estimated_hours` and `daily_available_hours` are pure data fields with a simple sum displayed
+  on the dashboard — there is no scheduling algorithm, no workload/utilization calculation that
+  cross-references the two, no auto-assignment based on remaining capacity, and no capacity
+  calendar. That is a deliberate, explicit exclusion from this change's scope, not an oversight.
+- No `actual_hours` field was added on tasks — actual time worked is tracked separately via the
+  existing `time_entries` feature and intentionally kept un-merged with the new estimate field.
