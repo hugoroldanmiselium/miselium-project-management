@@ -15,6 +15,7 @@ interface TaskFormModalProps {
     priority: TaskPriority;
     status: TaskStatus;
     due_date: string | null;
+    estimated_hours: number | null;
   }) => Promise<void>;
   projects: Project[];
   profiles: Profile[];
@@ -40,6 +41,7 @@ export function TaskFormModal({
   const [priority, setPriority] = useState<TaskPriority>('MEDIUM');
   const [status, setStatus] = useState<TaskStatus>('TODO');
   const [dueDate, setDueDate] = useState('');
+  const [estimatedHours, setEstimatedHours] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,6 +53,7 @@ export function TaskFormModal({
       setPriority(initialTask?.priority ?? 'MEDIUM');
       setStatus(initialTask?.status ?? 'TODO');
       setDueDate(initialTask?.due_date ?? '');
+      setEstimatedHours(initialTask?.estimated_hours != null ? String(initialTask.estimated_hours) : '');
       setError(null);
     }
   }, [open, initialTask, lockedProjectId, projects]);
@@ -64,6 +67,26 @@ export function TaskFormModal({
       setError('Selecciona un proyecto.');
       return;
     }
+    const trimmedEstimate = estimatedHours.trim();
+    let parsedEstimate: number | null = null;
+    if (!initialTask) {
+      // Required on create.
+      if (!trimmedEstimate) {
+        setError('Las horas estimadas son obligatorias.');
+        return;
+      }
+      parsedEstimate = Number(trimmedEstimate);
+      if (!Number.isFinite(parsedEstimate) || parsedEstimate <= 0) {
+        setError('Las horas estimadas deben ser un numero mayor que 0.');
+        return;
+      }
+    } else if (trimmedEstimate) {
+      parsedEstimate = Number(trimmedEstimate);
+      if (!Number.isFinite(parsedEstimate) || parsedEstimate < 0) {
+        setError('Las horas estimadas deben ser un numero valido.');
+        return;
+      }
+    }
     setError(null);
     await onSubmit({
       title: title.trim(),
@@ -73,6 +96,7 @@ export function TaskFormModal({
       priority,
       status,
       due_date: dueDate || null,
+      estimated_hours: parsedEstimate,
     });
   }
 
@@ -133,7 +157,21 @@ export function TaskFormModal({
           <option value="DONE">Completada</option>
         </Select>
       </div>
-      <Input label="Fecha limite" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+      <div className="two-col">
+        <Input label="Fecha limite" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+        <Input
+          label="Horas estimadas"
+          required={!initialTask}
+          type="number"
+          min="0"
+          step="0.5"
+          max="999.99"
+          placeholder="Ej. 4"
+          value={estimatedHours}
+          onChange={(e) => setEstimatedHours(e.target.value)}
+          hint="Tiempo estimado para completar esta tarea."
+        />
+      </div>
       {error && <div className="field-error">{error}</div>}
     </Modal>
   );

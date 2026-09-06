@@ -111,6 +111,10 @@ export function TaskDetailModal({ open, onClose, task, projectName, assigneeName
         {task.due_date && <span className="text-small text-muted">· vence {task.due_date}</span>}
       </div>
 
+      <div className="text-small text-muted mb-4">
+        ESTIMACIÓN — {task.estimated_hours != null ? `${Number(task.estimated_hours).toFixed(1)} horas` : 'Sin estimar'}
+      </div>
+
       {task.description && <p className="text-body text-secondary mb-4">{task.description}</p>}
 
       {canEditStatus && (

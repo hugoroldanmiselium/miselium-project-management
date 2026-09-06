@@ -1,4 +1,4 @@
-import { Calendar, Clock } from 'lucide-react';
+import { Calendar, Clock, Target } from 'lucide-react';
 import type { Task } from '../types/database';
 import { Badge, isOverdue, priorityColor, priorityLabel, taskStatusColor, taskStatusLabel } from './Badge';
 
@@ -29,6 +29,11 @@ export function TaskItem({ task, projectName, assigneeName, onStatusChange, show
           {!!loggedHours && (
             <span className="flex items-center gap-1">
               <Clock size={12} /> {loggedHours}h registradas
+            </span>
+          )}
+          {task.estimated_hours != null && (
+            <span className="flex items-center gap-1">
+              <Target size={12} /> {task.estimated_hours}h estimadas
             </span>
           )}
         </div>

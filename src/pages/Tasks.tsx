@@ -57,6 +57,7 @@ export function Tasks() {
       render: (t) => <Badge color={priorityColor(t.priority)}>{priorityLabel(t.priority)}</Badge>,
     },
     { header: 'Fecha limite', key: 'due', render: (t) => t.due_date ?? '—' },
+    { header: 'Estimación', key: 'estimated', render: (t) => (t.estimated_hours != null ? `${t.estimated_hours} h` : '—') },
     {
       header: 'Estado',
       key: 'status',

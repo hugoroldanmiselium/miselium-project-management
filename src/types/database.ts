@@ -10,6 +10,7 @@ export interface Profile {
   email: string;
   role: Role;
   created_at: string;
+  daily_available_hours: number | null;
 }
 
 export interface Client {
@@ -53,6 +54,7 @@ export interface Task {
   due_date: string | null;
   created_at: string;
   updated_at: string;
+  estimated_hours: number | null;
 }
 
 export interface ActivityLog {

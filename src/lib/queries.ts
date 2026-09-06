@@ -28,6 +28,16 @@ export const updateProfileRole = async (id: string, role: 'ADMIN' | 'DEVELOPER')
   return { data: data as Profile | null, error };
 };
 
+export const updateProfileCapacity = async (id: string, daily_available_hours: number | null): Result<Profile> => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ daily_available_hours })
+    .eq('id', id)
+    .select()
+    .single();
+  return { data: data as Profile | null, error };
+};
+
 // ===== Clients =====
 export const fetchClients = async (): Result<Client[]> => {
   const { data, error } = await supabase.from('clients').select('*').order('name', { ascending: true });
