@@ -1,0 +1,125 @@
+import { useMemo, useState } from 'react';
+import { Plus } from 'lucide-react';
+import { Button } from '../components/Button';
+import { Table, type Column } from '../components/Table';
+import { LoadingState, ErrorState, EmptyState } from '../components/States';
+import { Badge, isOverdue, priorityColor, priorityLabel, taskStatusColor, taskStatusLabel } from '../components/Badge';
+import { TaskFormModal } from '../components/forms/TaskFormModal';
+import { useAuth } from '../contexts/AuthContext';
+import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
+import { createTask, fetchProfiles, fetchProjects, fetchTasks, logActivity, updateTaskStatus } from '../lib/queries';
+import type { Task, TaskStatus } from '../types/database';
+
+export function Tasks() {
+  const { isAdmin, profile } = useAuth();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | TaskStatus>('ALL');
+
+  const { data: tasks, loading, error, refetch } = useSupabaseQuery(() => fetchTasks());
+  const { data: projects } = useSupabaseQuery(() => fetchProjects());
+  const { data: profiles } = useSupabaseQuery(() => fetchProfiles());
+
+  const projectMap = useMemo(() => new Map((projects ?? []).map((p) => [p.id, p.name])), [projects]);
+  const profileMap = useMemo(() => new Map((profiles ?? []).map((p) => [p.id, p.name])), [profiles]);
+
+  const filtered = useMemo(() => {
+    if (!tasks) return [];
+    if (statusFilter === 'ALL') return tasks;
+    return tasks.filter((t) => t.status === statusFilter);
+  }, [tasks, statusFilter]);
+
+  async function handleCreate(values: Parameters<typeof createTask>[0]) {
+    setSubmitting(true);
+    const { data } = await createTask(values);
+    setSubmitting(false);
+    if (data && profile) {
+      await logActivity(profile.id, data.project_id, `Creo la tarea "${data.title}"`);
+    }
+    setModalOpen(false);
+    refetch();
+  }
+
+  async function handleStatusChange(taskId: string, status: TaskStatus) {
+    await updateTaskStatus(taskId, status);
+    refetch();
+  }
+
+  const columns: Column<Task>[] = [
+    { header: 'Tarea', key: 'title', render: (t) => <span style={{ fontWeight: 500 }}>{t.title}</span> },
+    { header: 'Proyecto', key: 'project', render: (t) => projectMap.get(t.project_id) ?? '—' },
+    { header: 'Asignado a', key: 'assignee', render: (t) => (t.assigned_to ? profileMap.get(t.assigned_to) ?? '—' : 'Sin asignar') },
+    {
+      header: 'Prioridad',
+      key: 'priority',
+      render: (t) => <Badge color={priorityColor(t.priority)}>{priorityLabel(t.priority)}</Badge>,
+    },
+    { header: 'Fecha limite', key: 'due', render: (t) => t.due_date ?? '—' },
+    {
+      header: 'Estado',
+      key: 'status',
+      render: (t) => {
+        const canEdit = isAdmin || t.assigned_to === profile?.id;
+        if (!canEdit) {
+          return isOverdue(t.due_date, t.status) ? (
+            <Badge color="red">Vencida</Badge>
+          ) : (
+            <Badge color={taskStatusColor(t.status)}>{taskStatusLabel(t.status)}</Badge>
+          );
+        }
+        return (
+          <select
+            className="select-inline"
+            value={t.status}
+            onChange={(e) => handleStatusChange(t.id, e.target.value as TaskStatus)}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <option value="TODO">Pendiente</option>
+            <option value="IN_PROGRESS">En progreso</option>
+            <option value="DONE">Completada</option>
+          </select>
+        );
+      },
+    },
+  ];
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <h1>Tareas</h1>
+          <p className="text-secondary mt-1">Todas las tareas visibles para tu rol.</p>
+        </div>
+        {isAdmin && (
+          <Button variant="primary" icon={<Plus size={16} />} onClick={() => setModalOpen(true)}>
+            Nueva tarea
+          </Button>
+        )}
+      </div>
+
+      <div className="filter-bar">
+        {(['ALL', 'TODO', 'IN_PROGRESS', 'DONE'] as const).map((s) => (
+          <button key={s} className={`filter-chip ${statusFilter === s ? 'active' : ''}`} onClick={() => setStatusFilter(s)}>
+            {s === 'ALL' ? 'Todas' : taskStatusLabel(s)}
+          </button>
+        ))}
+      </div>
+
+      {loading && <LoadingState label="Cargando tareas..." />}
+      {!loading && error && <ErrorState description={error} onRetry={refetch} />}
+      {!loading && !error && filtered.length === 0 && (
+        <EmptyState title="Sin tareas" description="No hay tareas que coincidan con este filtro." />
+      )}
+      {!loading && !error && filtered.length > 0 && <Table columns={columns} rows={filtered} rowKey={(t) => t.id} />}
+
+      <TaskFormModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSubmit={handleCreate}
+        projects={projects ?? []}
+        profiles={profiles ?? []}
+        submitting={submitting}
+      />
+    </div>
+  );
+}
