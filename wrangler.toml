@@ -1,0 +1,11 @@
+name = "miselium-operations"
+compatibility_date = "2026-09-06"
+pages_build_output_dir = "dist"
+
+# This project is deployed to Cloudflare Pages as a static SPA build.
+# No Workers runtime code is used — Vite builds a static `dist/` folder
+# and Cloudflare Pages serves it directly. `public/_redirects` handles
+# client-side routing fallbacks (react-router).
+#
+# Env vars (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) must be set as
+# Cloudflare Pages "Build environment variables" — see DEPLOYMENT.md.
