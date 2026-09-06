@@ -1,18 +1,36 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
-import { fetchProfiles, fetchProjectMembersForProjects, fetchProjects, updateProfileRole } from '../lib/queries';
+import {
+  fetchProfiles,
+  fetchProjectMembersForProjects,
+  fetchProjects,
+  fetchTasks,
+  fetchTimeEntries,
+  updateProfileRole,
+} from '../lib/queries';
 import { LoadingState, ErrorState, EmptyState } from '../components/States';
 import { Table, type Column } from '../components/Table';
 import { Badge } from '../components/Badge';
 import type { Profile } from '../types/database';
 
+function startOfWeek(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay(); // 0 = Sunday
+  const diff = day === 0 ? 6 : day - 1; // days since Monday
+  d.setDate(d.getDate() - diff);
+  return d;
+}
+
 export function Team() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, profile } = useAuth();
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   const { data: profiles, loading, error, refetch } = useSupabaseQuery(() => fetchProfiles());
   const { data: projects } = useSupabaseQuery(() => fetchProjects());
+  const { data: tasks } = useSupabaseQuery(() => fetchTasks());
+  const { data: timeEntries } = useSupabaseQuery(() => fetchTimeEntries());
 
   // For admin, fetch all project_members across all visible projects to compute counts.
   const projectIds = useMemo(() => (projects ?? []).map((p) => p.id), [projects]);
@@ -31,6 +49,34 @@ export function Team() {
     });
     return map;
   }, [allMembers, projects]);
+
+  // Workload: open tasks (TODO + IN_PROGRESS) and hours logged this week, per user.
+  // ADMIN sees everyone's; DEVELOPER only sees their own row's numbers (others
+  // show as blank), matching the spec's role-scoping for this view.
+  const openTasksByUser = useMemo(() => {
+    const map = new Map<string, number>();
+    (tasks ?? []).forEach((t) => {
+      if (t.assigned_to && (t.status === 'TODO' || t.status === 'IN_PROGRESS')) {
+        map.set(t.assigned_to, (map.get(t.assigned_to) ?? 0) + 1);
+      }
+    });
+    return map;
+  }, [tasks]);
+
+  const hoursThisWeekByUser = useMemo(() => {
+    const weekStart = startOfWeek();
+    const map = new Map<string, number>();
+    (timeEntries ?? []).forEach((e) => {
+      if (new Date(e.entry_date) >= weekStart) {
+        map.set(e.user_id, (map.get(e.user_id) ?? 0) + Number(e.hours));
+      }
+    });
+    return map;
+  }, [timeEntries]);
+
+  function canSeeWorkload(userId: string) {
+    return isAdmin || userId === profile?.id;
+  }
 
   async function handleRoleChange(userId: string, role: 'ADMIN' | 'DEVELOPER') {
     setPendingId(userId);
@@ -72,6 +118,21 @@ export function Team() {
         ),
     },
     { header: 'Proyectos activos', key: 'active', render: (p) => activeCountByUser.get(p.id) ?? 0 },
+    {
+      header: 'Tareas abiertas',
+      key: 'openTasks',
+      render: (p) => (canSeeWorkload(p.id) ? openTasksByUser.get(p.id) ?? 0 : <span className="workload-muted">—</span>),
+    },
+    {
+      header: 'Horas esta semana',
+      key: 'hoursWeek',
+      render: (p) =>
+        canSeeWorkload(p.id) ? (
+          `${hoursThisWeekByUser.get(p.id) ?? 0}h`
+        ) : (
+          <span className="workload-muted">—</span>
+        ),
+    },
   ];
 
   return (
