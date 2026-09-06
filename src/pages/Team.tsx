@@ -151,7 +151,7 @@ export function Team() {
     },
     { header: 'Proyectos activos', key: 'active', render: (p) => activeCountByUser.get(p.id) ?? 0 },
     {
-      header: 'Disponibilidad',
+      header: 'Disponibilidad diaria',
       key: 'capacity',
       render: (p) =>
         isAdmin ? (
@@ -167,7 +167,7 @@ export function Team() {
             onChange={(e) => setCapacityDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))}
             onBlur={() => handleCapacityCommit(p.id, p.daily_available_hours)}
             placeholder="—"
-            title="Número de horas que este usuario puede dedicar a proyectos por día."
+            title="Horas disponibles por día laboral (lunes a sábado). Los domingos no cuentan como día laboral."
           />
         ) : (
           <span>{p.daily_available_hours != null ? `${p.daily_available_hours} h/día` : '—'}</span>
@@ -197,6 +197,9 @@ export function Team() {
           <h1>Equipo</h1>
           <p className="text-secondary mt-1">
             {isAdmin ? 'Administra los roles del equipo.' : 'Miembros del equipo de Miselium.'}
+          </p>
+          <p className="text-small text-muted mt-1">
+            La disponibilidad es diaria, de lunes a sábado — los domingos no cuentan como día laboral.
           </p>
         </div>
       </div>
