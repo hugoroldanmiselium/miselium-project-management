@@ -4,6 +4,28 @@ Internal operations tool for Miselium: clients, projects, tasks, assignees, stat
 progress, a role-scoped dashboard, and admin/developer permissions. Not a full ERP/CRM/Jira —
 deliberately minimal.
 
+## Agency features (v0.2)
+
+Added on top of the v0.1 base, still $0 infrastructure (same Supabase project, no new services):
+
+- **Time tracking** — log hours against a task you're assigned to (click any task to open its
+  detail modal). Totals shown per task and per project.
+- **Workload view** — the Team page shows open tasks and hours logged this week per developer
+  (ADMIN sees everyone's, DEVELOPER only their own row).
+- **Git repo link** — an optional `repo_url` per project, shown as a link on the project page.
+- **Basic billing visibility** — `billing_type` (hourly/fixed) + `hourly_rate` per project, with a
+  computed total (hours logged x rate) shown for hourly projects. Visibility only, not invoicing.
+- **In-app notifications** — a bell in the header with an unread badge. Task-assignment
+  notifications are inserted by a Postgres trigger (`notify_task_assignment` in
+  `supabase/migrations/005_agency_features.sql`). "Due soon" (due within 2 days, not DONE)
+  notifications are computed client-side on page load from the user's own tasks — there's no
+  server to run a scheduled job, so this is a v1 approximation rather than a persisted,
+  server-pushed notification. See `src/hooks/useNotifications.ts`.
+- **Task comments** — a comments thread inside the task detail modal, scoped to project members.
+
+See `DATABASE.md` for the new tables/columns and `SECURITY.md` for the RLS policies and live
+verification results.
+
 ## Stack
 
 - **Frontend:** React 19 + TypeScript + Vite
@@ -65,10 +87,11 @@ npm run lint       # oxlint (warnings only, no errors)
 ```
 src/
   design-system/     tokens.css, typography.css — shared design tokens
-  components/        reusable UI library (Button, Input, Modal, Table, Chart, ...)
+  components/        reusable UI library (Button, Input, Modal, Table, Chart, TaskDetailModal, ...)
   components/forms/  domain form modals (ProjectFormModal, TaskFormModal, ClientFormModal)
   contexts/          AuthContext (session + profile + role)
   hooks/             useSupabaseQuery — generic loading/error/data/refetch hook
+                      useNotifications — merges persisted + client-computed "due soon" notifications
   layouts/           AppLayout (sidebar + header shell)
   routes/            ProtectedRoute (auth guard)
   lib/                supabase client, typed query functions

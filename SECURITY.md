@@ -31,6 +31,9 @@ policies on `profiles`/`project_members` querying themselves:
 | `project_members`| ADMIN, the member themself, or any member of that project | ADMIN only |
 | `tasks`          | ADMIN, or DEVELOPER who is a member of the task's project | INSERT/DELETE: ADMIN only. UPDATE: ADMIN or the task's `assigned_to` user (lets a developer update their own task's status without letting them reassign someone else's task or touch other projects) |
 | `activity_log`   | ADMIN, or DEVELOPER who is a member of that project | INSERT: any user, but only for themselves (`user_id = auth.uid()`) and only for a project they belong to (or ADMIN). No UPDATE. DELETE: ADMIN only |
+| `time_entries`   | ADMIN, or the entry's own `user_id`, or a DEVELOPER who is a member of the task's project (so per-task/per-project totals are visible to teammates) | INSERT: `user_id` must equal `auth.uid()`, and the task must be assigned to that user (or ADMIN). UPDATE/DELETE: ADMIN or the entry's own `user_id` |
+| `notifications`  | only the notification's own `user_id` — no ADMIN carve-out | No general INSERT policy for users; rows are inserted by the `notify_task_assignment()` security-definer trigger on `tasks`. UPDATE/DELETE: only the notification's own `user_id` (used to mark read) |
+| `task_comments`  | ADMIN, or a DEVELOPER who is a member of the task's project | INSERT: `user_id = auth.uid()` and the task's project membership check. No UPDATE (append-only, like `activity_log`). DELETE: ADMIN or the comment's own `user_id` |
 
 ## What this actually prevents
 
@@ -66,6 +69,51 @@ policies themselves are unchanged, so these results still hold for the current a
 These are exactly the checks called for in the spec's Definition of Done ("verified by SQL
 role-switch test, not just UI").
 
+## Agency features (v0.2) — live-tested RLS results
+
+Tested end-to-end against the live project using real JWTs for `gerardo@miselium.local` and
+`nikte@miselium.local` (`POST /auth/v1/token?grant_type=password`), then direct REST calls. All
+test rows were deleted afterward.
+
+**`time_entries`:**
+1. Gerardo `POST /rest/v1/time_entries` for a task assigned to him, in a project he's a member
+   of, under his own `user_id` — **succeeded**.
+2. Gerardo `POST /rest/v1/time_entries` against a task assigned to Nikte (different project) —
+   **rejected**, `42501 new row violates row-level security policy`.
+3. Gerardo `POST /rest/v1/time_entries` with his own assigned task but `user_id` set to Nikte's id
+   (impersonation attempt) — **rejected** the same way.
+4. Nikte logged time on her own assigned task — **succeeded**.
+5. Gerardo `GET /rest/v1/time_entries` returned only his own entry (not Nikte's, whose task is in
+   a project Gerardo does not belong to) — confirming the "own + shared-project teammates" SELECT
+   policy correctly excludes entries from projects he isn't on.
+
+**`notifications`:**
+1. Logged in as Hugo (ADMIN) and `PATCH`ed a task's `assigned_to` from Gerardo to Nikte via
+   `/rest/v1/tasks` — the `notify_task_assignment()` trigger fired and inserted a notification row
+   for Nikte (verified: message referenced the task title, `link` was `/app/tasks`).
+2. Nikte `GET /rest/v1/notifications` returned that row; Gerardo's `GET` on the same endpoint
+   returned `[]` — confirming a user only ever sees their own notifications.
+3. Gerardo `PATCH /rest/v1/notifications?id=eq.<nikte's notification>` (attempting to mark someone
+   else's notification read) affected **0 rows**.
+4. Gerardo `POST /rest/v1/notifications` (attempting to insert a notification for himself
+   directly, bypassing the trigger) was **rejected** — there is no general INSERT policy for
+   users, only the security-definer trigger can write these rows.
+5. Nikte `PATCH`ing her own notification to `{"read": true}` — **succeeded**.
+
+**`task_comments`** (spot-checked alongside the above):
+1. Gerardo commented on a task in a project he's a member of — **succeeded**.
+2. Gerardo commented on Nikte's task in a project he does not belong to — **rejected** with the
+   same `42501` RLS error.
+
+One implementation detail worth calling out: the `time_entries` INSERT policy originally checked
+"is this task assigned to me" with a plain SQL subquery against `tasks`, which is itself subject
+to `tasks`'s own RLS (`tasks_select`). That subquery correctly returns nothing (and the insert is
+rejected) for a task that's assigned to a user who somehow isn't a `project_members` row for that
+project — an edge case surfaced by a stray seed task during testing. The final policy uses a
+dedicated `security definer` helper (`is_task_assignee()`, mirroring the existing
+`is_project_member()` pattern) so the assignment check isn't accidentally gated by project
+membership.
+
 ## Frontend-side authorization
 
 The frontend also hides admin-only actions (New Project / New Task / New Client buttons, Edit/
@@ -96,3 +144,15 @@ invalid values are rejected by Postgres even if the frontend validation were byp
 - No rate limiting beyond what Supabase provides by default.
 - No audit trail on `profiles` role changes beyond the general `activity_log` (which currently
   logs project-scoped actions, not role changes) — a natural v0.2 addition.
+
+## Known limitations / out of scope for v0.2 (agency features)
+
+- "Due soon" notifications (task due within 2 days, not DONE) are computed client-side on page
+  load from the current user's own tasks, not stored server-side or pushed in real time. There is
+  no server to run a scheduled job against in this "$0 infra" app, and enabling `pg_cron` would be
+  a new piece of infrastructure beyond what was scoped. This means a user only sees a "due soon"
+  reminder after they load the app, not the instant it becomes true — an accepted v1 trade-off,
+  documented in `src/hooks/useNotifications.ts`.
+- Billing visibility is read-only math (hours logged x rate for hourly projects); there is no
+  invoice generation, payment tracking, or editable line items.
+- No webhook/commit integration for the repo link — it's a plain URL field.
