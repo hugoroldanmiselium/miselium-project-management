@@ -36,7 +36,7 @@ type Tab = 'tasks' | 'team' | 'activity';
 export function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin, profile } = useAuth();
+  const { canManage, profile } = useAuth();
   const [tab, setTab] = useState<Tab>('tasks');
   const [editOpen, setEditOpen] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
@@ -155,7 +155,7 @@ export function ProjectDetail() {
             </a>
           )}
         </div>
-        {isAdmin && (
+        {canManage && (
           <div className="flex gap-2">
             <Button variant="secondary" icon={<Pencil size={15} />} onClick={() => setEditOpen(true)}>
               Editar
@@ -239,7 +239,7 @@ export function ProjectDetail() {
         <div className="card">
           <div className="flex justify-between items-center" style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)' }}>
             <h3 style={{ fontSize: 15 }}>Tareas del proyecto</h3>
-            {isAdmin && (
+            {canManage && (
               <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setTaskModalOpen(true)}>
                 Nueva tarea
               </Button>
@@ -250,7 +250,7 @@ export function ProjectDetail() {
           ) : (
             (tasks ?? []).map((t) => {
               const assignee = profiles?.find((p) => p.id === t.assigned_to);
-              const canEditStatus = isAdmin || t.assigned_to === profile?.id;
+              const canEditStatus = canManage || t.assigned_to === profile?.id;
               return (
                 <TaskItem
                   key={t.id}
@@ -268,7 +268,7 @@ export function ProjectDetail() {
 
       {tab === 'team' && (
         <div className="card card-padded">
-          {isAdmin && (
+          {canManage && (
             <div className="flex gap-2 mb-4">
               <Select value={addMemberId} onChange={(e) => setAddMemberId(e.target.value)} style={{ flex: 1 }}>
                 <option value="">Selecciona un integrante para agregar</option>
@@ -296,7 +296,7 @@ export function ProjectDetail() {
                       <div className="text-small text-muted">{m.role}</div>
                     </div>
                   </div>
-                  {isAdmin && (
+                  {canManage && (
                     <Button variant="ghost" size="sm" onClick={() => handleRemoveMember(m.id)}>
                       Quitar
                     </Button>

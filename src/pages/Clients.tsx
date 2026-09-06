@@ -11,7 +11,7 @@ import { createClient, fetchClients, fetchProjects } from '../lib/queries';
 import type { Client } from '../types/database';
 
 export function Clients() {
-  const { isAdmin } = useAuth();
+  const { canManage, profile } = useAuth();
   const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -38,8 +38,9 @@ export function Clients() {
   }, [projects]);
 
   async function handleCreate(values: Parameters<typeof createClient>[0]) {
+    if (!profile) return;
     setSubmitting(true);
-    await createClient(values);
+    await createClient({ ...values, organization_id: profile.organization_id });
     setSubmitting(false);
     setModalOpen(false);
     refetch();
@@ -63,7 +64,7 @@ export function Clients() {
           <h1>Clientes</h1>
           <p className="text-secondary mt-1">Directorio de clientes de Miselium.</p>
         </div>
-        {isAdmin && (
+        {canManage && (
           <Button variant="primary" icon={<Plus size={16} />} onClick={() => setModalOpen(true)}>
             Nuevo cliente
           </Button>

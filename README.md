@@ -1,8 +1,19 @@
 # Miselium Operations v0.1
 
 Internal operations tool for Miselium: clients, projects, tasks, assignees, statuses, dates,
-progress, a role-scoped dashboard, and admin/developer permissions. Not a full ERP/CRM/Jira —
-deliberately minimal.
+progress, a role-scoped dashboard, and 3-tier permissions. Not a full ERP/CRM/Jira — deliberately
+minimal. As of Fase 2, the app is also multi-tenant: every organization's clients/projects/tasks/
+team are isolated from every other organization at the database (RLS) level, not just hidden in
+the UI — see "Multi-tenancy" below and `SECURITY.md`.
+
+## Multi-tenancy (Fase 2)
+
+Data is scoped to an `organizations` row via `organization_id` on `profiles`/`clients`/`projects`
+(the three "top-level" entities — everything else derives its org through those). Today there is
+exactly one organization, "Miselium", holding all existing data; a second company will be added
+later once it exists. There is no org-switcher UI in this phase — each user belongs to exactly one
+organization for the life of their session. See `DATABASE.md` for the schema and `SECURITY.md` for
+the RLS policies and live cross-org isolation test results.
 
 ## Agency features (v0.2)
 
@@ -10,8 +21,8 @@ Added on top of the v0.1 base, still $0 infrastructure (same Supabase project, n
 
 - **Time tracking** — log hours against a task you're assigned to (click any task to open its
   detail modal). Totals shown per task and per project.
-- **Workload view** — the Team page shows open tasks and hours logged this week per developer
-  (ADMIN sees everyone's, DEVELOPER only their own row).
+- **Workload view** — the Team page shows open tasks and hours logged this week per team member
+  (ADMIN/PROJECT_MANAGER see everyone's, COLLABORATOR only their own row).
 - **Git repo link** — an optional `repo_url` per project, shown as a link on the project page.
 - **Basic billing visibility** — `billing_type` (hourly/fixed) + `hourly_rate` per project, with a
   computed total (hours logged x rate) shown for hourly projects. Visibility only, not invoicing.
@@ -32,8 +43,18 @@ verification results.
   task list, task detail, and the create/edit form), required when creating a new task.
 - **Per-user daily capacity** — an optional `daily_available_hours` field per profile, editable
   only by ADMIN (Team page "Disponibilidad" column). Purely a data field with a simple team-wide
-  (or per-developer) sum on the dashboard — not a scheduling algorithm, not a workload calculator,
+  (or per-person) sum on the dashboard — not a scheduling algorithm, not a workload calculator,
   not auto-assignment. See `DATABASE.md` / `SECURITY.md` for the schema and RLS details.
+
+## Multi-tenancy + 3-tier roles (Fase 2)
+
+- **Organizations** — see "Multi-tenancy" above.
+- **3-tier roles** — `DEVELOPER` was renamed to `COLLABORATOR` (identical permissions), and a new
+  `PROJECT_MANAGER` tier was added in between `COLLABORATOR` and `ADMIN`: it can do everything
+  ADMIN can operationally (create/edit projects, create and assign tasks, manage clients, manage
+  the team, view metrics/reports), except changing a user's role or another user's daily capacity,
+  which stays ADMIN-only. See "Roles" below and `SECURITY.md` for the full policy table and live
+  verification.
 
 ## Stack
 
@@ -51,14 +72,16 @@ Seeded directly into Supabase Auth. Password is the same for all three accounts.
 synthetic `@miselium.local` login identifiers (no real inbox behind them) since only
 username/password were requested — not `@miselium.com.mx` addresses.
 
-| Name          | Role      | Email                    | Password        |
-|---------------|-----------|---------------------------|-----------------|
-| Hugo Roldan   | ADMIN     | hugo@miselium.local      | `Miselium2026!` |
-| Gerardo Roldan| DEVELOPER | gerardo@miselium.local   | `Miselium2026!` |
-| Nikte         | DEVELOPER | nikte@miselium.local     | `Miselium2026!` |
+| Name          | Role        | Email                    | Password        |
+|---------------|-------------|---------------------------|-----------------|
+| Hugo Roldan   | ADMIN       | hugo@miselium.local      | `Miselium2026!` |
+| Gerardo Roldan| COLLABORATOR| gerardo@miselium.local   | `Miselium2026!` |
+| Nikte         | COLLABORATOR| nikte@miselium.local     | `Miselium2026!` |
 
-Log in as Hugo to see the full admin view (all clients/projects/tasks, team management). Log in
-as Gerardo or Nikte to see the scoped developer view (only their assigned projects/tasks).
+All three belong to the "Miselium" organization. Log in as Hugo to see the full admin view (all
+clients/projects/tasks, team management). Log in as Gerardo or Nikte to see the scoped collaborator
+view (only their assigned projects/tasks). No one is currently a PROJECT_MANAGER — the human will
+promote someone via the Team page's role dropdown when ready.
 
 ## Running locally
 
@@ -130,10 +153,14 @@ See `ARCHITECTURE.md`, `DATABASE.md`, and `SECURITY.md` for deeper detail on eac
 ## Roles
 
 - **ADMIN** — full CRUD on clients/projects/tasks, assigns tasks, manages team/roles, sees
-  everything.
-- **DEVELOPER** — sees only projects they're a member of and tasks assigned to them, can update
-  the status of their own tasks, cannot manage users/roles or modify projects/clients they don't
-  belong to.
+  everything within their organization.
+- **PROJECT_MANAGER** — same operational reach as ADMIN within their organization (create/edit
+  projects, create and assign tasks, manage clients, manage the team, view metrics/reports), except
+  changing a user's role or another user's daily capacity, which stays ADMIN-only.
+- **COLLABORATOR** — sees only projects they're a member of and tasks assigned to them, can update
+  the status of their own tasks, log time, and comment; cannot manage users/roles or modify
+  projects/clients they don't belong to. (Renamed from `DEVELOPER` — identical permissions.)
 
-Permissions are enforced by Postgres Row Level Security, not just UI hiding — see `SECURITY.md`
-for the policies and how they were tested.
+Permissions are enforced by Postgres Row Level Security, not just UI hiding, and are additionally
+scoped per-organization (an ADMIN or PROJECT_MANAGER in one organization can never see or modify
+another organization's data) — see `SECURITY.md` for the policies and how they were tested.

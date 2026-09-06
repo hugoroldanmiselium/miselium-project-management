@@ -27,7 +27,7 @@ interface TaskDetailModalProps {
 }
 
 export function TaskDetailModal({ open, onClose, task, projectName, assigneeName, profiles, onChanged }: TaskDetailModalProps) {
-  const { profile, isAdmin } = useAuth();
+  const { profile, canManage } = useAuth();
   const [hours, setHours] = useState('');
   const [note, setNote] = useState('');
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -59,7 +59,7 @@ export function TaskDetailModal({ open, onClose, task, projectName, assigneeName
     [timeEntries]
   );
 
-  const canLogTime = !!task && !!profile && (isAdmin || task.assigned_to === profile.id);
+  const canLogTime = !!task && !!profile && (canManage || task.assigned_to === profile.id);
 
   if (!task) return null;
 
@@ -99,7 +99,7 @@ export function TaskDetailModal({ open, onClose, task, projectName, assigneeName
     refetchComments();
   }
 
-  const canEditStatus = isAdmin || task.assigned_to === profile?.id;
+  const canEditStatus = canManage || task.assigned_to === profile?.id;
 
   return (
     <Modal open={open} onClose={onClose} title={task.title} maxWidth={560}>

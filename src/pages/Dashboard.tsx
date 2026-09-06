@@ -11,7 +11,7 @@ import { computeProgress } from '../components/ProjectProgress';
 import { isOverdue } from '../components/Badge';
 
 export function Dashboard() {
-  const { profile, isAdmin } = useAuth();
+  const { profile, canManage } = useAuth();
 
   const { data: projects, loading: loadingProjects, error: errorProjects, refetch: refetchProjects } = useSupabaseQuery(
     () => fetchProjects()
@@ -25,14 +25,14 @@ export function Dashboard() {
   const loading = loadingProjects || loadingTasks;
   const error = errorProjects || errorTasks;
 
-  // RLS already scopes projects/tasks to the current user when DEVELOPER, so
-  // no extra client-side filtering is required for correctness — but we keep
-  // scoping explicit here for clarity when computing "my" metrics.
+  // RLS already scopes projects/tasks to the current user when COLLABORATOR,
+  // so no extra client-side filtering is required for correctness — but we
+  // keep scoping explicit here for clarity when computing "my" metrics.
   const scopedTasks = useMemo(() => {
     if (!tasks) return [];
-    if (isAdmin) return tasks;
+    if (canManage) return tasks;
     return tasks.filter((t) => t.assigned_to === profile?.id);
-  }, [tasks, isAdmin, profile]);
+  }, [tasks, canManage, profile]);
 
   const scopedProjects = useMemo(() => projects ?? [], [projects]);
 
@@ -49,11 +49,12 @@ export function Dashboard() {
     .filter((t) => t.status !== 'DONE')
     .reduce((sum, t) => sum + Number(t.estimated_hours ?? 0), 0);
 
-  // Daily capacity: ADMIN sees the whole team's summed daily capacity
-  // (matching how every other ADMIN stat here is team-wide); a DEVELOPER
-  // sees just their own daily capacity, matching the Team page's per-user
-  // workload scoping (canSeeWorkload) rather than exposing teammates' data.
-  const dailyCapacity = isAdmin
+  // Daily capacity: ADMIN/PROJECT_MANAGER see the whole team's summed daily
+  // capacity (matching how every other team-wide stat here is scoped); a
+  // COLLABORATOR sees just their own daily capacity, matching the Team
+  // page's per-user workload scoping (canSeeWorkload) rather than exposing
+  // teammates' data.
+  const dailyCapacity = canManage
     ? (profiles ?? []).reduce((sum, p) => sum + Number(p.daily_available_hours ?? 0), 0)
     : Number(profile?.daily_available_hours ?? 0);
 
@@ -113,7 +114,7 @@ export function Dashboard() {
           label="Capacidad diaria"
           value={`${dailyCapacity}h`}
           icon={<Gauge size={14} />}
-          delta={isAdmin ? 'equipo completo' : 'tu disponibilidad'}
+          delta={canManage ? 'equipo completo' : 'tu disponibilidad'}
         />
       </div>
 

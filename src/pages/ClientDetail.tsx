@@ -13,7 +13,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 export function ClientDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { canManage } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -49,7 +49,7 @@ export function ClientDetail() {
           <h1>{client.name}</h1>
           <p className="text-secondary mt-1">{client.contact_name ?? 'Sin contacto asignado'}</p>
         </div>
-        {isAdmin && (
+        {canManage && (
           <div className="flex gap-2">
             <Button variant="secondary" icon={<Pencil size={15} />} onClick={() => setEditOpen(true)}>
               Editar

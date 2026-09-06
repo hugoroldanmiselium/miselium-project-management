@@ -12,8 +12,8 @@ import {
 } from '../lib/queries';
 import { LoadingState, ErrorState, EmptyState } from '../components/States';
 import { Table, type Column } from '../components/Table';
-import { Badge } from '../components/Badge';
-import type { Profile } from '../types/database';
+import { Badge, roleColor } from '../components/Badge';
+import type { Profile, Role } from '../types/database';
 
 function startOfWeek(): Date {
   const d = new Date();
@@ -25,7 +25,7 @@ function startOfWeek(): Date {
 }
 
 export function Team() {
-  const { isAdmin, profile } = useAuth();
+  const { isAdmin, canManage, profile } = useAuth();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [capacityDrafts, setCapacityDrafts] = useState<Record<string, string>>({});
   const [capacityPendingId, setCapacityPendingId] = useState<string | null>(null);
@@ -54,8 +54,9 @@ export function Team() {
   }, [allMembers, projects]);
 
   // Workload: open tasks (TODO + IN_PROGRESS) and hours logged this week, per user.
-  // ADMIN sees everyone's; DEVELOPER only sees their own row's numbers (others
-  // show as blank), matching the spec's role-scoping for this view.
+  // ADMIN/PROJECT_MANAGER see everyone's (part of "view metrics/reports");
+  // COLLABORATOR only sees their own row's numbers (others show as blank),
+  // matching the spec's role-scoping for this view.
   const openTasksByUser = useMemo(() => {
     const map = new Map<string, number>();
     (tasks ?? []).forEach((t) => {
@@ -78,10 +79,10 @@ export function Team() {
   }, [timeEntries]);
 
   function canSeeWorkload(userId: string) {
-    return isAdmin || userId === profile?.id;
+    return canManage || userId === profile?.id;
   }
 
-  async function handleRoleChange(userId: string, role: 'ADMIN' | 'DEVELOPER') {
+  async function handleRoleChange(userId: string, role: Role) {
     setPendingId(userId);
     await updateProfileRole(userId, role);
     setPendingId(null);
@@ -140,13 +141,14 @@ export function Team() {
             className="select-inline"
             value={p.role}
             disabled={pendingId === p.id}
-            onChange={(e) => handleRoleChange(p.id, e.target.value as 'ADMIN' | 'DEVELOPER')}
+            onChange={(e) => handleRoleChange(p.id, e.target.value as Role)}
           >
             <option value="ADMIN">ADMIN</option>
-            <option value="DEVELOPER">DEVELOPER</option>
+            <option value="PROJECT_MANAGER">PROJECT_MANAGER</option>
+            <option value="COLLABORATOR">COLLABORATOR</option>
           </select>
         ) : (
-          <Badge color={p.role === 'ADMIN' ? 'purple' : 'blue'}>{p.role}</Badge>
+          <Badge color={roleColor(p.role)}>{p.role}</Badge>
         ),
     },
     { header: 'Proyectos activos', key: 'active', render: (p) => activeCountByUser.get(p.id) ?? 0 },

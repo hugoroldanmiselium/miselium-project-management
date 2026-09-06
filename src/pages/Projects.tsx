@@ -13,7 +13,7 @@ import { createProject, fetchClients, fetchProjects, fetchTasks, logActivity } f
 import type { Project } from '../types/database';
 
 export function Projects() {
-  const { isAdmin, profile } = useAuth();
+  const { canManage, profile } = useAuth();
   const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -34,8 +34,9 @@ export function Projects() {
   }, [tasks]);
 
   async function handleCreate(values: Parameters<typeof createProject>[0]) {
+    if (!profile) return;
     setSubmitting(true);
-    const { data, error: createError } = await createProject(values);
+    const { data, error: createError } = await createProject({ ...values, organization_id: profile.organization_id });
     setSubmitting(false);
     if (!createError) {
       if (profile && data) {
@@ -70,7 +71,7 @@ export function Projects() {
           <h1>Proyectos</h1>
           <p className="text-secondary mt-1">Todos los proyectos activos y su progreso.</p>
         </div>
-        {isAdmin && (
+        {canManage && (
           <Button variant="primary" icon={<Plus size={16} />} onClick={() => setModalOpen(true)}>
             Nuevo proyecto
           </Button>
@@ -82,7 +83,7 @@ export function Projects() {
       {!loading && !error && projects && projects.length === 0 && (
         <EmptyState
           title="Aun no hay proyectos"
-          description={isAdmin ? 'Crea el primer proyecto para empezar.' : 'No estas asignado a ningun proyecto todavia.'}
+          description={canManage ? 'Crea el primer proyecto para empezar.' : 'No estas asignado a ningun proyecto todavia.'}
         />
       )}
       {!loading && !error && projects && projects.length > 0 && (

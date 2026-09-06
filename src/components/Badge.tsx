@@ -104,6 +104,19 @@ export function priorityLabel(priority: string): string {
   }
 }
 
+export function roleColor(role: string): SemanticColor {
+  switch (role) {
+    case 'ADMIN':
+      return 'purple';
+    case 'PROJECT_MANAGER':
+      return 'yellow';
+    case 'COLLABORATOR':
+      return 'blue';
+    default:
+      return 'gray';
+  }
+}
+
 export function isOverdue(dueDate: string | null, status: string): boolean {
   if (!dueDate || status === 'DONE') return false;
   const today = new Date();

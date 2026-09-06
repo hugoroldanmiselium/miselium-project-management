@@ -8,6 +8,7 @@ import type {
   Project,
   ProjectMember,
   ProjectStatus,
+  Role,
   Task,
   TaskComment,
   TaskPriority,
@@ -23,7 +24,7 @@ export const fetchProfiles = async (): Result<Profile[]> => {
   return { data: data as Profile[] | null, error };
 };
 
-export const updateProfileRole = async (id: string, role: 'ADMIN' | 'DEVELOPER'): Result<Profile> => {
+export const updateProfileRole = async (id: string, role: Role): Result<Profile> => {
   const { data, error } = await supabase.from('profiles').update({ role }).eq('id', id).select().single();
   return { data: data as Profile | null, error };
 };

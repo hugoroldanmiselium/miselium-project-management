@@ -12,7 +12,7 @@ import { createTask, fetchProfiles, fetchProjects, fetchTasks, logActivity, upda
 import type { Task, TaskStatus } from '../types/database';
 
 export function Tasks() {
-  const { isAdmin, profile } = useAuth();
+  const { canManage, profile } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'ALL' | TaskStatus>('ALL');
@@ -62,7 +62,7 @@ export function Tasks() {
       header: 'Estado',
       key: 'status',
       render: (t) => {
-        const canEdit = isAdmin || t.assigned_to === profile?.id;
+        const canEdit = canManage || t.assigned_to === profile?.id;
         if (!canEdit) {
           return isOverdue(t.due_date, t.status) ? (
             <Badge color="red">Vencida</Badge>
@@ -93,7 +93,7 @@ export function Tasks() {
           <h1>Tareas</h1>
           <p className="text-secondary mt-1">Todas las tareas visibles para tu rol.</p>
         </div>
-        {isAdmin && (
+        {canManage && (
           <Button variant="primary" icon={<Plus size={16} />} onClick={() => setModalOpen(true)}>
             Nueva tarea
           </Button>

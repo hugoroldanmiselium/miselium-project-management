@@ -11,6 +11,12 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   isAdmin: boolean;
+  isProjectManager: boolean;
+  /** ADMIN or PROJECT_MANAGER - the "can manage content" tier: clients/projects/tasks
+   *  CRUD, task assignment, project team management. Mirrors the DB helper
+   *  current_role_is_admin_or_pm() in 008_org_scoped_rls.sql. Does NOT cover the
+   *  ADMIN-only slice (changing a user's role or daily_available_hours). */
+  canManage: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -78,6 +84,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }
 
+  const isAdmin = profile?.role === 'ADMIN';
+  const isProjectManager = profile?.role === 'PROJECT_MANAGER';
+
   const value: AuthContextValue = {
     session,
     profile,
@@ -85,7 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     error,
     signIn,
     signOut,
-    isAdmin: profile?.role === 'ADMIN',
+    isAdmin,
+    isProjectManager,
+    canManage: isAdmin || isProjectManager,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

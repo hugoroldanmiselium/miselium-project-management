@@ -1,8 +1,14 @@
-export type Role = 'ADMIN' | 'DEVELOPER';
+export type Role = 'ADMIN' | 'PROJECT_MANAGER' | 'COLLABORATOR';
 export type ProjectStatus = 'PLANNING' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED';
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
 export type BillingType = 'HOURLY' | 'FIXED';
+
+export interface Organization {
+  id: string;
+  name: string;
+  created_at: string;
+}
 
 export interface Profile {
   id: string;
@@ -11,6 +17,7 @@ export interface Profile {
   role: Role;
   created_at: string;
   daily_available_hours: number | null;
+  organization_id: string;
 }
 
 export interface Client {
@@ -21,6 +28,7 @@ export interface Client {
   phone: string | null;
   notes: string | null;
   created_at: string;
+  organization_id: string;
 }
 
 export interface Project {
@@ -35,6 +43,7 @@ export interface Project {
   repo_url: string | null;
   billing_type: BillingType;
   hourly_rate: number | null;
+  organization_id: string;
 }
 
 export interface ProjectMember {
@@ -96,6 +105,7 @@ export interface TaskComment {
 export interface Database {
   public: {
     Tables: {
+      organizations: { Row: Organization; Insert: Partial<Organization>; Update: Partial<Organization> };
       profiles: { Row: Profile; Insert: Partial<Profile>; Update: Partial<Profile> };
       clients: { Row: Client; Insert: Partial<Client>; Update: Partial<Client> };
       projects: { Row: Project; Insert: Partial<Project>; Update: Partial<Project> };
