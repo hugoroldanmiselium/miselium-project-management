@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { FolderKanban, ListTodo, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { FolderKanban, ListTodo, AlertTriangle, CheckCircle2, Hourglass, Gauge } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { fetchProfiles, fetchProjects, fetchRecentActivity, fetchTasks } from '../lib/queries';
@@ -41,6 +41,21 @@ export function Dashboard() {
   const overdueTasks = scopedTasks.filter((t) => isOverdue(t.due_date, t.status)).length;
   const completedTasks = scopedTasks.filter((t) => t.status === 'DONE').length;
   const deliveryRate = scopedTasks.length > 0 ? Math.round((completedTasks / scopedTasks.length) * 100) : 0;
+
+  // Pure aggregate displays, not a scheduling/workload algorithm: pending
+  // estimated hours over the same role-scoped task set already used for the
+  // other KPIs above (null treated as 0, never crashes on missing estimates).
+  const pendingHours = scopedTasks
+    .filter((t) => t.status !== 'DONE')
+    .reduce((sum, t) => sum + Number(t.estimated_hours ?? 0), 0);
+
+  // Daily capacity: ADMIN sees the whole team's summed daily capacity
+  // (matching how every other ADMIN stat here is team-wide); a DEVELOPER
+  // sees just their own daily capacity, matching the Team page's per-user
+  // workload scoping (canSeeWorkload) rather than exposing teammates' data.
+  const dailyCapacity = isAdmin
+    ? (profiles ?? []).reduce((sum, p) => sum + Number(p.daily_available_hours ?? 0), 0)
+    : Number(profile?.daily_available_hours ?? 0);
 
   const projectProgressData = useMemo(() => {
     return scopedProjects
@@ -93,6 +108,13 @@ export function Dashboard() {
         <StatCard label="Tareas pendientes" value={pendingTasks} icon={<ListTodo size={14} />} delta="por completar" />
         <StatCard label="Tareas vencidas" value={overdueTasks} icon={<AlertTriangle size={14} />} delta="requieren atencion" />
         <StatCard label="% de entrega" value={`${deliveryRate}%`} icon={<CheckCircle2 size={14} />} delta={`${completedTasks} completadas`} />
+        <StatCard label="Horas pendientes" value={`${pendingHours}h`} icon={<Hourglass size={14} />} delta="estimadas, sin completar" />
+        <StatCard
+          label="Capacidad diaria"
+          value={`${dailyCapacity}h`}
+          icon={<Gauge size={14} />}
+          delta={isAdmin ? 'equipo completo' : 'tu disponibilidad'}
+        />
       </div>
 
       <div className="two-col mb-6">

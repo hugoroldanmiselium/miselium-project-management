@@ -26,6 +26,15 @@ Added on top of the v0.1 base, still $0 infrastructure (same Supabase project, n
 See `DATABASE.md` for the new tables/columns and `SECURITY.md` for the RLS policies and live
 verification results.
 
+## Task estimation + daily capacity (v0.3)
+
+- **Task effort estimation** — an optional `estimated_hours` field on every task (shown on the
+  task list, task detail, and the create/edit form), required when creating a new task.
+- **Per-user daily capacity** — an optional `daily_available_hours` field per profile, editable
+  only by ADMIN (Team page "Disponibilidad" column). Purely a data field with a simple team-wide
+  (or per-developer) sum on the dashboard — not a scheduling algorithm, not a workload calculator,
+  not auto-assignment. See `DATABASE.md` / `SECURITY.md` for the schema and RLS details.
+
 ## Stack
 
 - **Frontend:** React 19 + TypeScript + Vite

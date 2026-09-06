@@ -7,6 +7,7 @@ import {
   fetchProjects,
   fetchTasks,
   fetchTimeEntries,
+  updateProfileCapacity,
   updateProfileRole,
 } from '../lib/queries';
 import { LoadingState, ErrorState, EmptyState } from '../components/States';
@@ -26,6 +27,8 @@ function startOfWeek(): Date {
 export function Team() {
   const { isAdmin, profile } = useAuth();
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [capacityDrafts, setCapacityDrafts] = useState<Record<string, string>>({});
+  const [capacityPendingId, setCapacityPendingId] = useState<string | null>(null);
 
   const { data: profiles, loading, error, refetch } = useSupabaseQuery(() => fetchProfiles());
   const { data: projects } = useSupabaseQuery(() => fetchProjects());
@@ -85,6 +88,35 @@ export function Team() {
     refetch();
   }
 
+  async function handleCapacityCommit(userId: string, currentValue: number | null) {
+    const draft = capacityDrafts[userId];
+    if (draft === undefined) return;
+    const trimmed = draft.trim();
+    if (trimmed === '') {
+      if (currentValue == null) return;
+      setCapacityPendingId(userId);
+      await updateProfileCapacity(userId, null);
+      setCapacityPendingId(null);
+      refetch();
+      return;
+    }
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 24) {
+      // Invalid: revert to the last known good value without saving.
+      setCapacityDrafts((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+      return;
+    }
+    if (parsed === currentValue) return;
+    setCapacityPendingId(userId);
+    await updateProfileCapacity(userId, parsed);
+    setCapacityPendingId(null);
+    refetch();
+  }
+
   const columns: Column<Profile>[] = [
     {
       header: 'Nombre',
@@ -118,6 +150,29 @@ export function Team() {
         ),
     },
     { header: 'Proyectos activos', key: 'active', render: (p) => activeCountByUser.get(p.id) ?? 0 },
+    {
+      header: 'Disponibilidad',
+      key: 'capacity',
+      render: (p) =>
+        isAdmin ? (
+          <input
+            className="input"
+            type="number"
+            min="0.01"
+            max="24"
+            step="0.5"
+            style={{ width: 80 }}
+            disabled={capacityPendingId === p.id}
+            value={capacityDrafts[p.id] ?? (p.daily_available_hours != null ? String(p.daily_available_hours) : '')}
+            onChange={(e) => setCapacityDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))}
+            onBlur={() => handleCapacityCommit(p.id, p.daily_available_hours)}
+            placeholder="—"
+            title="Número de horas que este usuario puede dedicar a proyectos por día."
+          />
+        ) : (
+          <span>{p.daily_available_hours != null ? `${p.daily_available_hours} h/día` : '—'}</span>
+        ),
+    },
     {
       header: 'Tareas abiertas',
       key: 'openTasks',
