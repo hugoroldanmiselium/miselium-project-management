@@ -14,19 +14,20 @@ deliberately minimal.
   framework
 - **Deploy target:** Cloudflare Pages (static SPA build) — see `DEPLOYMENT.md`
 
-## Demo login credentials
+## Login credentials
 
-Seeded directly into Supabase Auth. Password is the same for all three demo accounts.
+Seeded directly into Supabase Auth. Password is the same for all three accounts. Emails are
+synthetic `@miselium.local` login identifiers (no real inbox behind them) since only
+username/password were requested — not `@miselium.com.mx` addresses.
 
-| Role      | Email                  | Password        |
-|-----------|-------------------------|-----------------|
-| ADMIN     | admin@miselium.com     | `Miselium2026!` |
-| DEVELOPER | dev1@miselium.com      | `Miselium2026!` |
-| DEVELOPER | dev2@miselium.com      | `Miselium2026!` |
+| Name          | Role      | Email                    | Password        |
+|---------------|-----------|---------------------------|-----------------|
+| Hugo Roldan   | ADMIN     | hugo@miselium.local      | `Miselium2026!` |
+| Gerardo Roldan| DEVELOPER | gerardo@miselium.local   | `Miselium2026!` |
+| Nikte         | DEVELOPER | nikte@miselium.local     | `Miselium2026!` |
 
-Log in as `admin@miselium.com` to see the full admin view (all clients/projects/tasks, team
-management). Log in as `dev1@miselium.com` or `dev2@miselium.com` to see the scoped developer
-view (only their assigned projects/tasks).
+Log in as Hugo to see the full admin view (all clients/projects/tasks, team management). Log in
+as Gerardo or Nikte to see the scoped developer view (only their assigned projects/tasks).
 
 ## Running locally
 

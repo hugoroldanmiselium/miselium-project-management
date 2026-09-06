@@ -97,10 +97,12 @@ Mayacorptrips (ACTIVE), ERP Demo (COMPLETED) — one per client except ALTUM, wh
 HIGH priority, and due dates spanning past (overdue), today, and future — so the dashboard KPIs
 (active projects, pending, overdue, completed, delivery %) all render non-trivial numbers.
 
-3 demo users (`admin@miselium.com` ADMIN, `dev1@miselium.com` / `dev2@miselium.com` DEVELOPER)
-created directly via `auth.users` + `auth.identities` + `profiles` inserts (see "How the demo
-users were created" below), assigned as `project_members` and task `assigned_to` values so both
-roles have meaningful, realistic data to look at.
+3 users (`hugo@miselium.local` ADMIN, `gerardo@miselium.local` / `nikte@miselium.local`
+DEVELOPER) created directly via `auth.users` + `auth.identities` + `profiles` inserts (see "How
+the demo users were created" below), assigned as `project_members` and task `assigned_to` values
+so both roles have meaningful, realistic data to look at. (An earlier seed used placeholder demo
+users `admin@miselium.com`/`dev1@miselium.com`/`dev2@miselium.com` — migration
+`004_replace_demo_users.sql` deleted those and reassigned their data to the real accounts above.)
 
 5 `activity_log` rows tied to specific projects/users for the dashboard's recent-activity feed.
 

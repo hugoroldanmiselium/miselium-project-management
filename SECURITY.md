@@ -45,7 +45,10 @@ policies on `profiles`/`project_members` querying themselves:
 
 ## Verified with live SQL/REST calls (not just written and assumed correct)
 
-Using the project's live Supabase instance, this was tested end-to-end during the build:
+Using the project's live Supabase instance, this was tested end-to-end during the build. `dev1@miselium.com`
+below was the original placeholder seed account; it was later deleted and replaced by
+`gerardo@miselium.local` / `nikte@miselium.local` (migration `004_replace_demo_users.sql`) — the RLS
+policies themselves are unchanged, so these results still hold for the current accounts:
 
 1. Logged in as `dev1@miselium.com` via `POST /auth/v1/token?grant_type=password` to get a real
    user JWT.
