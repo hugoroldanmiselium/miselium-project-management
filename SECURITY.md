@@ -304,3 +304,24 @@ invalid values are rejected by Postgres even if the frontend validation were byp
   migration-only operation in this phase.
 - Phases/milestones/dependencies/risks/budget/templates/calendar/documents were explicitly out of
   scope for this change and were not touched.
+
+## Second organization onboarded — "RD Consultorio Fiscal" (live-verified)
+
+`009_second_organization.sql` created a second real tenant with Rafael (ADMIN) and Gustavo
+(COLLABORATOR). Verified end-to-end with real JWTs (`/auth/v1/token?grant_type=password`) after
+onboarding:
+
+1. Rafael logs in successfully; `GET /rest/v1/projects`, `/clients`, and `/profiles` return only
+   RD Consultorio Fiscal's own (empty) data — zero Miselium rows visible.
+2. Gustavo logs in successfully; same scoping — sees only RD's 2 profiles, no clients/projects.
+3. Hugo (Miselium ADMIN) still sees only Miselium's 3 profiles and the "Miselium" organization —
+   RD Consultorio Fiscal is completely invisible to him, confirming isolation holds in both
+   directions.
+4. Rafael, as ADMIN of his org, successfully created a client when supplying his own
+   `organization_id` (`201`), confirming PROJECT_MANAGER/ADMIN content permissions extend
+   correctly to a newly onboarded org with zero prior code changes.
+5. Rafael attempting to stamp a foreign `organization_id` on a new client was **rejected**
+   (`42501`), confirming the cross-org write protection holds for a brand-new org, not just the
+   original one.
+6. Test client from step 4 was deleted immediately after verification — no data left behind in
+   RD Consultorio Fiscal beyond its 2 real users.

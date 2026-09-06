@@ -9,11 +9,13 @@ the UI — see "Multi-tenancy" below and `SECURITY.md`.
 ## Multi-tenancy (Fase 2)
 
 Data is scoped to an `organizations` row via `organization_id` on `profiles`/`clients`/`projects`
-(the three "top-level" entities — everything else derives its org through those). Today there is
-exactly one organization, "Miselium", holding all existing data; a second company will be added
-later once it exists. There is no org-switcher UI in this phase — each user belongs to exactly one
-organization for the life of their session. See `DATABASE.md` for the schema and `SECURITY.md` for
-the RLS policies and live cross-org isolation test results.
+(the three "top-level" entities — everything else derives its org through those). There are
+currently two organizations: "Miselium" (the original data) and "RD Consultorio Fiscal" (a second
+real external client, onboarded in `009_second_organization.sql`) — fully isolated from each other
+at the RLS level, live-verified in both directions (see `SECURITY.md`). There is no org-switcher
+UI in this phase — each user belongs to exactly one organization for the life of their session.
+Credentials for RD Consultorio Fiscal's users are intentionally not committed to this repo (real
+external-client credentials, shared out-of-band) — see the note in `DATABASE.md`.
 
 ## Agency features (v0.2)
 

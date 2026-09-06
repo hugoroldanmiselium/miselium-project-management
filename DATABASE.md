@@ -22,6 +22,12 @@ under `supabase/migrations/`:
 - `008_org_scoped_rls.sql` — rewrites every RLS policy from `002`/`005`/`006` to also scope rows to
   the caller's organization, and introduces the `PROJECT_MANAGER` permission tier — see "Fase 2"
   below and `SECURITY.md` for the full policy table and live verification results
+- `009_second_organization.sql` — onboards a second real tenant, "RD Consultorio Fiscal", with its
+  own ADMIN (Rafael) and COLLABORATOR (Gustavo) user. Unlike `003`/`004`'s internal demo accounts,
+  this migration file does NOT contain the real temporary passwords in git — it uses
+  `__RAFAEL_TEMP_PASSWORD__`/`__GUSTAVO_TEMP_PASSWORD__` placeholders that were substituted only in
+  memory at run time, since these are real external-client credentials, not internal demo data.
+  Credentials were shared with the requester directly, not stored in the repo.
 
 ## Tables
 
