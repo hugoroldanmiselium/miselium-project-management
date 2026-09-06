@@ -39,13 +39,19 @@ export function TaskDetailModal({ open, onClose, task, projectName, assigneeName
     data: timeEntries,
     loading: timeLoading,
     refetch: refetchTime,
-  } = useSupabaseQuery(() => fetchTimeEntriesForTask(task!.id), [task?.id, open]);
+  } = useSupabaseQuery(
+    () => (task ? fetchTimeEntriesForTask(task.id) : Promise.resolve({ data: [], error: null })),
+    [task?.id, open]
+  );
 
   const {
     data: comments,
     loading: commentsLoading,
     refetch: refetchComments,
-  } = useSupabaseQuery(() => fetchCommentsForTask(task!.id), [task?.id, open]);
+  } = useSupabaseQuery(
+    () => (task ? fetchCommentsForTask(task.id) : Promise.resolve({ data: [], error: null })),
+    [task?.id, open]
+  );
 
   const profileMap = useMemo(() => new Map(profiles.map((p) => [p.id, p.name])), [profiles]);
   const totalHours = useMemo(
