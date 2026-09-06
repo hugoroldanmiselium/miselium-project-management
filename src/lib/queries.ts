@@ -3,13 +3,16 @@ import { supabase } from './supabase';
 import type {
   ActivityLog,
   Client,
+  Notification,
   Profile,
   Project,
   ProjectMember,
   ProjectStatus,
   Task,
+  TaskComment,
   TaskPriority,
   TaskStatus,
+  TimeEntry,
 } from '../types/database';
 
 type Result<T> = Promise<{ data: T | null; error: PostgrestError | null }>;
@@ -159,3 +162,81 @@ export const fetchRecentActivity = async (limit = 8): Result<ActivityLog[]> => {
 
 export const logActivity = (userId: string, projectId: string, action: string) =>
   supabase.from('activity_log').insert({ user_id: userId, project_id: projectId, action });
+
+// ===== Time entries =====
+export const fetchTimeEntries = async (): Result<TimeEntry[]> => {
+  const { data, error } = await supabase
+    .from('time_entries')
+    .select('*')
+    .order('entry_date', { ascending: false });
+  return { data: data as TimeEntry[] | null, error };
+};
+
+export const fetchTimeEntriesForTask = async (taskId: string): Result<TimeEntry[]> => {
+  const { data, error } = await supabase
+    .from('time_entries')
+    .select('*')
+    .eq('task_id', taskId)
+    .order('entry_date', { ascending: false });
+  return { data: data as TimeEntry[] | null, error };
+};
+
+export const fetchTimeEntriesForTasks = async (taskIds: string[]): Result<TimeEntry[]> => {
+  if (taskIds.length === 0) return { data: [], error: null };
+  const { data, error } = await supabase.from('time_entries').select('*').in('task_id', taskIds);
+  return { data: data as TimeEntry[] | null, error };
+};
+
+export const fetchTimeEntriesForUser = async (userId: string): Result<TimeEntry[]> => {
+  const { data, error } = await supabase
+    .from('time_entries')
+    .select('*')
+    .eq('user_id', userId)
+    .order('entry_date', { ascending: false });
+  return { data: data as TimeEntry[] | null, error };
+};
+
+export const createTimeEntry = async (input: {
+  task_id: string;
+  user_id: string;
+  hours: number;
+  note: string | null;
+  entry_date: string;
+}): Result<TimeEntry> => {
+  const { data, error } = await supabase.from('time_entries').insert(input).select().single();
+  return { data: data as TimeEntry | null, error };
+};
+
+export const deleteTimeEntry = (id: string) => supabase.from('time_entries').delete().eq('id', id);
+
+// ===== Notifications =====
+export const fetchNotifications = async (userId: string): Result<Notification[]> => {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(30);
+  return { data: data as Notification[] | null, error };
+};
+
+export const markNotificationRead = (id: string) =>
+  supabase.from('notifications').update({ read: true }).eq('id', id);
+
+export const markAllNotificationsRead = (userId: string) =>
+  supabase.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false);
+
+// ===== Task comments =====
+export const fetchCommentsForTask = async (taskId: string): Result<TaskComment[]> => {
+  const { data, error } = await supabase
+    .from('task_comments')
+    .select('*')
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: true });
+  return { data: data as TaskComment[] | null, error };
+};
+
+export const createComment = async (input: { task_id: string; user_id: string; body: string }): Result<TaskComment> => {
+  const { data, error } = await supabase.from('task_comments').insert(input).select().single();
+  return { data: data as TaskComment | null, error };
+};
