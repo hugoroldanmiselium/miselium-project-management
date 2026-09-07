@@ -1,8 +1,29 @@
 # Deployment
 
-This app is deploy-ready for **Cloudflare Pages** as a static SPA build. Deployment to Cloudflare
-was **not** performed as part of this build (no Cloudflare account is connected in this
-environment) — the steps below are the exact remaining manual steps.
+**Live:** https://miselium-operations.pages.dev — deployed via `wrangler pages deploy dist`
+against Cloudflare account `Direccion@miselium.com.mx` (account ID
+`b9bd3f671596f17a01b15475aa76340e`), project name `miselium-operations`, production branch `main`.
+Verified end-to-end post-deploy: login, dashboard, and RLS-scoped data all work identically to
+local dev, zero console errors.
+
+This first deploy uploaded a build compiled **locally** (`npm run build` with `.env.local`
+present), so the two `VITE_SUPABASE_*` values are already baked into the shipped JS bundle — no
+Cloudflare Pages environment variables were needed for this manual upload path. If you later
+switch to **git-based builds** (Cloudflare building from GitHub on every push, via "Connect to
+Git" in the dashboard instead of `wrangler pages deploy`), you MUST set `VITE_SUPABASE_URL` /
+`VITE_SUPABASE_ANON_KEY` under the Pages project's Settings → Environment variables first, since
+Cloudflare's own build won't have access to the gitignored `.env.local`.
+
+To redeploy after future changes:
+```bash
+npm run build
+npx wrangler pages deploy dist --project-name=miselium-operations
+```
+(requires `CLOUDFLARE_API_TOKEN` env var set to a token with Account → Cloudflare Pages → Edit
+permission, and `CLOUDFLARE_ACCOUNT_ID=b9bd3f671596f17a01b15475aa76340e`).
+
+The steps below (git-based setup) remain as an alternative path if Miselium later wants
+auto-deploy on every push instead of manual `wrangler` uploads.
 
 ## What's already done
 
