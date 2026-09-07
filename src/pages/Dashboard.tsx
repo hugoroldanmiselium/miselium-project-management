@@ -2,13 +2,15 @@ import { useMemo } from 'react';
 import { FolderKanban, ListTodo, AlertTriangle, CheckCircle2, Hourglass, Gauge } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
-import { fetchProfiles, fetchProjects, fetchRecentActivity, fetchTasks } from '../lib/queries';
+import { fetchOccurrencesInRange, fetchProfiles, fetchProjects, fetchRecentActivity, fetchRecurringTasks, fetchTasks } from '../lib/queries';
 import { StatCard } from '../components/StatCard';
 import { LoadingState, ErrorState, EmptyState } from '../components/States';
 import { HorizontalBarChart, DonutChart } from '../components/Chart';
 import { TaskItem } from '../components/TaskItem';
 import { computeProgress } from '../components/ProjectProgress';
 import { isOverdue } from '../components/Badge';
+import { addDays, startOfWeek, todayDateStr } from '../lib/recurringDates';
+import { buildWeekOccurrences } from '../lib/occurrences';
 
 export function Dashboard() {
   const { profile, canManage } = useAuth();
@@ -21,6 +23,41 @@ export function Dashboard() {
   );
   const { data: activity, loading: loadingActivity } = useSupabaseQuery(() => fetchRecentActivity(8));
   const { data: profiles } = useSupabaseQuery(() => fetchProfiles());
+
+  // Recurring tasks' estimated hours participate in the same "horas
+  // pendientes" / "capacidad diaria" aggregates below, extending the
+  // existing minimal capacity display rather than building a new one - see
+  // 010_recurring_tasks.sql / RecurringTasksPanel for the full feature.
+  const { data: recurringTasks } = useSupabaseQuery(() => fetchRecurringTasks());
+  const todayStr = todayDateStr();
+  const weekStart = useMemo(() => startOfWeek(todayStr), [todayStr]);
+  const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
+  const recurringTaskIds = useMemo(() => (recurringTasks ?? []).map((r) => r.id), [recurringTasks]);
+  const { data: weekOccurrenceRows } = useSupabaseQuery(
+    () => fetchOccurrencesInRange(recurringTaskIds, weekStart, weekEnd),
+    [recurringTaskIds.join(','), weekStart]
+  );
+
+  const scopedRecurringTasks = useMemo(() => {
+    const list = recurringTasks ?? [];
+    return canManage ? list : list.filter((rt) => rt.assignee_id === profile?.id);
+  }, [recurringTasks, canManage, profile]);
+
+  const recurringWeekViews = useMemo(
+    () => buildWeekOccurrences(scopedRecurringTasks, weekOccurrenceRows ?? [], weekStart),
+    [scopedRecurringTasks, weekOccurrenceRows, weekStart]
+  );
+
+  // Sum of estimated_hours for this week's recurring occurrences that are
+  // still open (not DONE/SKIPPED) - the recurring analog of pendingHours
+  // below, which sums project tasks with status !== 'DONE'.
+  const pendingRecurringHours = useMemo(
+    () =>
+      recurringWeekViews
+        .filter((v) => v.status !== 'DONE' && v.status !== 'SKIPPED')
+        .reduce((sum, v) => sum + Number(v.recurringTask.estimated_hours ?? 0), 0),
+    [recurringWeekViews]
+  );
 
   const loading = loadingProjects || loadingTasks;
   const error = errorProjects || errorTasks;
@@ -44,10 +81,13 @@ export function Dashboard() {
 
   // Pure aggregate displays, not a scheduling/workload algorithm: pending
   // estimated hours over the same role-scoped task set already used for the
-  // other KPIs above (null treated as 0, never crashes on missing estimates).
-  const pendingHours = scopedTasks
+  // other KPIs above (null treated as 0, never crashes on missing estimates),
+  // plus this week's still-open recurring occurrences (pendingRecurringHours,
+  // computed above) so recurring work counts toward the same total.
+  const pendingProjectHours = scopedTasks
     .filter((t) => t.status !== 'DONE')
     .reduce((sum, t) => sum + Number(t.estimated_hours ?? 0), 0);
+  const pendingHours = pendingProjectHours + pendingRecurringHours;
 
   // Daily capacity: ADMIN/PROJECT_MANAGER see the whole team's summed daily
   // capacity (matching how every other team-wide stat here is scoped); a

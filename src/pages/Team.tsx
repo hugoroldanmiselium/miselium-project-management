@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import {
   fetchProfiles,
   fetchProjectMembersForProjects,
   fetchProjects,
+  fetchRecurringTasks,
   fetchTasks,
   fetchTimeEntries,
   updateProfileCapacity,
@@ -13,6 +15,7 @@ import {
 import { LoadingState, ErrorState, EmptyState } from '../components/States';
 import { Table, type Column } from '../components/Table';
 import { Badge, roleColor } from '../components/Badge';
+import { todayDateStr, weekdayOf } from '../lib/recurringDates';
 import type { Profile, Role } from '../types/database';
 
 function startOfWeek(): Date {
@@ -34,6 +37,35 @@ export function Team() {
   const { data: projects } = useSupabaseQuery(() => fetchProjects());
   const { data: tasks } = useSupabaseQuery(() => fetchTasks());
   const { data: timeEntries } = useSupabaseQuery(() => fetchTimeEntries());
+  const { data: recurringTasks } = useSupabaseQuery(() => fetchRecurringTasks());
+
+  // Over-allocation indicator: today's assigned hours (project tasks due
+  // today, not DONE, + today's active recurring occurrences) vs.
+  // daily_available_hours. Additive to the existing estimated_hours/
+  // daily_available_hours fields - not a new scheduling system, just a
+  // same-day comparison shown as a small warning badge.
+  const todayStr = todayDateStr();
+  const todayWeekday = weekdayOf(todayStr);
+  const todayHoursByUser = useMemo(() => {
+    const map = new Map<string, number>();
+    (tasks ?? []).forEach((t) => {
+      if (t.assigned_to && t.due_date === todayStr && t.status !== 'DONE') {
+        map.set(t.assigned_to, (map.get(t.assigned_to) ?? 0) + Number(t.estimated_hours ?? 0));
+      }
+    });
+    (recurringTasks ?? []).forEach((rt) => {
+      if (
+        rt.assignee_id &&
+        rt.active &&
+        rt.weekday === todayWeekday &&
+        rt.start_date <= todayStr &&
+        (!rt.end_date || rt.end_date >= todayStr)
+      ) {
+        map.set(rt.assignee_id, (map.get(rt.assignee_id) ?? 0) + Number(rt.estimated_hours ?? 0));
+      }
+    });
+    return map;
+  }, [tasks, recurringTasks, todayStr, todayWeekday]);
 
   // For admin, fetch all project_members across all visible projects to compute counts.
   const projectIds = useMemo(() => (projects ?? []).map((p) => p.id), [projects]);
@@ -174,6 +206,27 @@ export function Team() {
         ) : (
           <span>{p.daily_available_hours != null ? `${p.daily_available_hours} h/día` : '—'}</span>
         ),
+    },
+    {
+      header: 'Carga de hoy',
+      key: 'todayLoad',
+      render: (p) => {
+        if (!canSeeWorkload(p.id)) return <span className="workload-muted">—</span>;
+        const load = todayHoursByUser.get(p.id) ?? 0;
+        const overAllocated = p.daily_available_hours != null && load > Number(p.daily_available_hours);
+        return (
+          <div className="flex items-center gap-2">
+            <span>{load}h</span>
+            {overAllocated && (
+              <Badge color="red">
+                <span className="flex items-center gap-1">
+                  <AlertTriangle size={11} /> Sobreasignado
+                </span>
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       header: 'Tareas abiertas',

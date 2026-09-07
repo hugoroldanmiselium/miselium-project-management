@@ -1,12 +1,24 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
-import { fetchProfiles, fetchProjects, fetchTasksForUser, fetchTimeEntriesForTasks, updateTaskStatus } from '../lib/queries';
+import {
+  fetchOccurrencesInRange,
+  fetchProfiles,
+  fetchProjects,
+  fetchRecurringTasks,
+  fetchTasksForUser,
+  fetchTimeEntriesForTasks,
+  setOccurrenceStatus,
+  updateTaskStatus,
+} from '../lib/queries';
 import { LoadingState, ErrorState, EmptyState } from '../components/States';
 import { TaskItem } from '../components/TaskItem';
 import { TaskDetailModal } from '../components/TaskDetailModal';
+import { RecurringOccurrenceItem } from '../components/RecurringOccurrenceItem';
 import { taskStatusLabel } from '../components/Badge';
-import type { Task, TaskStatus } from '../types/database';
+import { startOfWeek, todayDateStr } from '../lib/recurringDates';
+import { buildWeekOccurrences, occurrencesForDate } from '../lib/occurrences';
+import type { OccurrenceStatus, Task, TaskStatus } from '../types/database';
 
 export function Today() {
   const { profile } = useAuth();
@@ -30,6 +42,37 @@ export function Today() {
     (timeEntries ?? []).forEach((e) => map.set(e.task_id, (map.get(e.task_id) ?? 0) + Number(e.hours)));
     return map;
   }, [timeEntries]);
+
+  // Today's recurring occurrences assigned to the current user - a separate
+  // section from project tasks above, clearly labeled as recurring (see
+  // RecurringOccurrenceItem's "↻ Recurrente" tag).
+  const todayStr = todayDateStr();
+  const weekStart = useMemo(() => startOfWeek(todayStr), [todayStr]);
+  const { data: allRecurringTasks } = useSupabaseQuery(() => fetchRecurringTasks());
+  const myRecurringTasks = useMemo(
+    () => (allRecurringTasks ?? []).filter((rt) => rt.assignee_id === profile?.id && rt.active),
+    [allRecurringTasks, profile?.id]
+  );
+  const myRecurringTaskIds = useMemo(() => myRecurringTasks.map((rt) => rt.id), [myRecurringTasks]);
+  const { data: todayOccurrenceRows, refetch: refetchOccurrences } = useSupabaseQuery(
+    () => fetchOccurrencesInRange(myRecurringTaskIds, todayStr, todayStr),
+    [myRecurringTaskIds.join(','), todayStr]
+  );
+  const todayOccurrences = useMemo(() => {
+    const views = buildWeekOccurrences(myRecurringTasks, todayOccurrenceRows ?? [], weekStart);
+    return occurrencesForDate(views, todayStr);
+  }, [myRecurringTasks, todayOccurrenceRows, weekStart, todayStr]);
+
+  async function handleOccurrenceStatusChange(recurringTaskId: string, status: OccurrenceStatus) {
+    await setOccurrenceStatus({
+      recurring_task_id: recurringTaskId,
+      occurrence_date: todayStr,
+      status,
+      completed_at: status === 'DONE' ? new Date().toISOString() : null,
+      completed_by: status === 'DONE' ? profile?.id ?? null : null,
+    });
+    refetchOccurrences();
+  }
 
   const filtered = useMemo(() => {
     if (!tasks) return [];
@@ -81,6 +124,23 @@ export function Today() {
               onClick={() => setActiveTask(t)}
             />
           ))}
+        </div>
+      )}
+
+      {todayOccurrences.length > 0 && (
+        <div className="mt-6">
+          <h3 className="mb-2" style={{ fontSize: 15 }}>
+            Tareas recurrentes de hoy
+          </h3>
+          <div className="card">
+            {todayOccurrences.map((v) => (
+              <RecurringOccurrenceItem
+                key={v.recurringTask.id}
+                view={v}
+                onStatusChange={(status) => handleOccurrenceStatusChange(v.recurringTask.id, status)}
+              />
+            ))}
+          </div>
         </div>
       )}
       <TaskDetailModal

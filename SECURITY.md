@@ -325,3 +325,72 @@ onboarding:
    original one.
 6. Test client from step 4 was deleted immediately after verification — no data left behind in
    RD Consultorio Fiscal beyond its 2 real users.
+
+## Weekly recurring tasks (`010_recurring_tasks.sql`) — live-tested RLS results
+
+Two new tables: `recurring_tasks` (the template/config — a new top-level org-scoped entity with
+its own `organization_id` column, unlike `tasks`) and `recurring_task_occurrences` (materialized
+status overrides only — see `DATABASE.md` for the duplicate-avoidance design). New helpers, same
+`security definer` style as the rest of this file: `is_recurring_task_in_org(id)`,
+`is_recurring_task_assignee(id)`.
+
+| Table                          | SELECT | INSERT/UPDATE | DELETE |
+|--------------------------------|--------|----------------|--------|
+| `recurring_tasks`              | anyone in the org (a COLLABORATOR needs to see the config to know what's expected of them) | ADMIN or PROJECT_MANAGER of the org only | ADMIN or PROJECT_MANAGER of the org only |
+| `recurring_task_occurrences`   | anyone in the parent recurring task's org | ADMIN/PM of the org, OR the COLLABORATOR who is the parent recurring task's `assignee_id` (their own occurrence only — never someone else's) | ADMIN or PROJECT_MANAGER of the org only |
+
+Live-tested against the real project with real JWTs, both organizations, both roles:
+
+1. Hugo (Miselium ADMIN) creates a recurring task via the UI — insert succeeds once
+   `organization_id` is stamped from `profile.organization_id` client-side (first attempt without
+   it was correctly rejected by RLS with HTTP 403, confirming the org-scoping `with check` is
+   live, not just written).
+2. Gerardo (Miselium COLLABORATOR), assigned to that recurring task: UI correctly hides "Nueva
+   tarea recurrente"/Editar/Pausar/Eliminar; direct `PATCH /rest/v1/recurring_tasks?id=eq.<id>`
+   with `{"name":"HACKED BY GERARDO"}` returned `200` with an **empty array** (RLS silently
+   filtered the row out of the update — 0 rows changed), confirming the config is protected at the
+   DB level, not just hidden in the UI.
+3. Gerardo upserting his own occurrence's status (`POST .../recurring_task_occurrences` with
+   `Prefer: resolution=merge-duplicates`) **succeeded** (`201`) — a COLLABORATOR can complete their
+   own assigned occurrence.
+4. Rafael (RD Consultorio Fiscal ADMIN) creates a recurring task in his own org — succeeds.
+5. Hugo (Miselium) querying that RD-org recurring task by id via REST gets `[]` — invisible across
+   orgs, confirming `recurring_tasks_select`'s org-scoping.
+6. Gustavo (RD COLLABORATOR) querying Gerardo's Miselium-org recurring task by id via REST also
+   gets `[]` — isolation holds in both directions.
+7. Gustavo (RD COLLABORATOR, not the assignee, not admin/PM) attempting
+   `PATCH /rest/v1/recurring_tasks?id=eq.<Rafael's RD task>` with a fake name returned `200` with
+   an empty array — even within the same org, a COLLABORATOR cannot edit a recurrence they don't
+   administer, matching "COLLABORATOR ... no puede modificar configuración de recurrencias que no
+   administra" from the spec.
+8. All throwaway rows created purely for the above (Gerardo's task, its test occurrence, Rafael's
+   RD test task) were deleted immediately after verification. Confirmed via row-count query that
+   `recurring_tasks` and `recurring_task_occurrences` are both back to 0 rows.
+
+**"Eliminar solo futuras ocurrencias" implementation**: sets the recurring task's `end_date` to
+yesterday (clamped to `start_date` if `start_date` is today/future, to satisfy the
+`recurring_tasks_end_after_start` check constraint) and `active = false`. This stops any further
+occurrence dates from being computed by the frontend's pure date-arithmetic going forward, while
+never touching the `recurring_task_occurrences` table — so completed/skipped history is never
+destroyed by this option. "Eliminar completamente" is a literal `DELETE` on the `recurring_tasks`
+row, which cascades to its `recurring_task_occurrences` rows via the FK.
+
+Rafael's and Gustavo's passwords were reset (via the same `crypt()`-via-SQL technique as
+`009_second_organization.sql`) to a temporary password purely so this round's live RLS/isolation
+testing could log in as them — reported to the human out-of-band, not committed anywhere in git.
+
+## Known limitations / out of scope for weekly recurring tasks
+
+- No background job pre-generates future occurrences — by design, see `DATABASE.md`'s
+  "duplicate-avoidance strategy". A occurrence only gets a persisted row once its status changes
+  away from the implicit `PENDING` default.
+- Occurrence history (the "Historial" view per recurring task) shows only persisted
+  `recurring_task_occurrences` rows, most recent first — it does not also list every still-pending
+  virtual date between the task's `start_date` and today. Acceptable v1 per the spec's "keep it
+  simple" instruction; nothing about correctness (completing/pausing/deleting) depends on it.
+- The over-allocation indicator on the Team page ("⚠️ Sobreasignado") compares only *today's*
+  assigned hours (project tasks due today + today's active recurring occurrences) against
+  `daily_available_hours` — it is not a weekly/multi-day capacity planner, matching the existing
+  "pure aggregate display, not a scheduling algorithm" scope already established for
+  `estimated_hours`/`daily_available_hours` in `006_task_estimation_capacity.sql`.
+- Phases/milestones/dependencies/risks/budget/templates/documents remain out of scope, untouched.

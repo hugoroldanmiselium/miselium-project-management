@@ -829,6 +829,55 @@
   margin-top: 2px;
 }
 
+/* ===== Weekly calendar ===== */
+.week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .week-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .week-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.week-day {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  min-height: 140px;
+}
+.week-day-today {
+  border-color: var(--color-black);
+}
+.week-day-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: var(--space-2);
+}
+.week-day-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.week-day-items .task-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
 /* ===== Workload ===== */
 .workload-muted {
   color: var(--color-text-muted);

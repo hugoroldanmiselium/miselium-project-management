@@ -3,6 +3,8 @@ export type ProjectStatus = 'PLANNING' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED';
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
 export type BillingType = 'HOURLY' | 'FIXED';
+export type Weekday = 'MON' | 'TUE' | 'WED' | 'THU' | 'FRI' | 'SAT' | 'SUN';
+export type OccurrenceStatus = 'PENDING' | 'IN_PROGRESS' | 'DONE' | 'SKIPPED';
 
 export interface Organization {
   id: string;
@@ -101,6 +103,38 @@ export interface TaskComment {
   created_at: string;
 }
 
+export interface RecurringTask {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  assignee_id: string | null;
+  weekday: Weekday;
+  time_of_day: string | null;
+  estimated_hours: number | null;
+  priority: TaskPriority;
+  category: string | null;
+  client_id: string | null;
+  project_id: string | null;
+  start_date: string;
+  end_date: string | null;
+  active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecurringTaskOccurrence {
+  id: string;
+  recurring_task_id: string;
+  occurrence_date: string;
+  status: OccurrenceStatus;
+  completed_at: string | null;
+  completed_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Minimal Database generic shape for supabase-js typing convenience.
 export interface Database {
   public: {
@@ -119,6 +153,12 @@ export interface Database {
       time_entries: { Row: TimeEntry; Insert: Partial<TimeEntry>; Update: Partial<TimeEntry> };
       notifications: { Row: Notification; Insert: Partial<Notification>; Update: Partial<Notification> };
       task_comments: { Row: TaskComment; Insert: Partial<TaskComment>; Update: Partial<TaskComment> };
+      recurring_tasks: { Row: RecurringTask; Insert: Partial<RecurringTask>; Update: Partial<RecurringTask> };
+      recurring_task_occurrences: {
+        Row: RecurringTaskOccurrence;
+        Insert: Partial<RecurringTaskOccurrence>;
+        Update: Partial<RecurringTaskOccurrence>;
+      };
     };
   };
 }

@@ -6,13 +6,18 @@ import { LoadingState, ErrorState, EmptyState } from '../components/States';
 import { Badge, isOverdue, priorityColor, priorityLabel, taskStatusColor, taskStatusLabel } from '../components/Badge';
 import { TaskFormModal } from '../components/forms/TaskFormModal';
 import { TaskDetailModal } from '../components/TaskDetailModal';
+import { RecurringTasksPanel } from '../components/RecurringTasksPanel';
+import { WeeklyCalendar } from '../components/WeeklyCalendar';
 import { useAuth } from '../contexts/AuthContext';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { createTask, fetchProfiles, fetchProjects, fetchTasks, logActivity, updateTaskStatus } from '../lib/queries';
 import type { Task, TaskStatus } from '../types/database';
 
+type TasksTab = 'list' | 'recurring' | 'calendar';
+
 export function Tasks() {
   const { canManage, profile } = useAuth();
+  const [tab, setTab] = useState<TasksTab>('list');
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'ALL' | TaskStatus>('ALL');
@@ -93,47 +98,66 @@ export function Tasks() {
           <h1>Tareas</h1>
           <p className="text-secondary mt-1">Todas las tareas visibles para tu rol.</p>
         </div>
-        {canManage && (
+        {tab === 'list' && canManage && (
           <Button variant="primary" icon={<Plus size={16} />} onClick={() => setModalOpen(true)}>
             Nueva tarea
           </Button>
         )}
       </div>
 
-      <div className="filter-bar">
-        {(['ALL', 'TODO', 'IN_PROGRESS', 'DONE'] as const).map((s) => (
-          <button key={s} className={`filter-chip ${statusFilter === s ? 'active' : ''}`} onClick={() => setStatusFilter(s)}>
-            {s === 'ALL' ? 'Todas' : taskStatusLabel(s)}
-          </button>
-        ))}
+      <div className="tabs">
+        <div className={`tab ${tab === 'list' ? 'active' : ''}`} onClick={() => setTab('list')}>
+          Lista
+        </div>
+        <div className={`tab ${tab === 'recurring' ? 'active' : ''}`} onClick={() => setTab('recurring')}>
+          Tareas recurrentes
+        </div>
+        <div className={`tab ${tab === 'calendar' ? 'active' : ''}`} onClick={() => setTab('calendar')}>
+          Calendario semanal
+        </div>
       </div>
 
-      {loading && <LoadingState label="Cargando tareas..." />}
-      {!loading && error && <ErrorState description={error} onRetry={refetch} />}
-      {!loading && !error && filtered.length === 0 && (
-        <EmptyState title="Sin tareas" description="No hay tareas que coincidan con este filtro." />
-      )}
-      {!loading && !error && filtered.length > 0 && (
-        <Table columns={columns} rows={filtered} rowKey={(t) => t.id} onRowClick={(t) => setActiveTask(t)} />
+      {tab === 'list' && (
+        <>
+          <div className="filter-bar">
+            {(['ALL', 'TODO', 'IN_PROGRESS', 'DONE'] as const).map((s) => (
+              <button key={s} className={`filter-chip ${statusFilter === s ? 'active' : ''}`} onClick={() => setStatusFilter(s)}>
+                {s === 'ALL' ? 'Todas' : taskStatusLabel(s)}
+              </button>
+            ))}
+          </div>
+
+          {loading && <LoadingState label="Cargando tareas..." />}
+          {!loading && error && <ErrorState description={error} onRetry={refetch} />}
+          {!loading && !error && filtered.length === 0 && (
+            <EmptyState title="Sin tareas" description="No hay tareas que coincidan con este filtro." />
+          )}
+          {!loading && !error && filtered.length > 0 && (
+            <Table columns={columns} rows={filtered} rowKey={(t) => t.id} onRowClick={(t) => setActiveTask(t)} />
+          )}
+
+          <TaskFormModal
+            open={modalOpen}
+            onClose={() => setModalOpen(false)}
+            onSubmit={handleCreate}
+            projects={projects ?? []}
+            profiles={profiles ?? []}
+            submitting={submitting}
+          />
+          <TaskDetailModal
+            open={!!activeTask}
+            onClose={() => setActiveTask(null)}
+            task={activeTask}
+            projectName={activeTask ? projectMap.get(activeTask.project_id) : undefined}
+            assigneeName={activeTask ? profileMap.get(activeTask.assigned_to ?? '') : undefined}
+            profiles={profiles ?? []}
+            onChanged={refetch}
+          />
+        </>
       )}
 
-      <TaskFormModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSubmit={handleCreate}
-        projects={projects ?? []}
-        profiles={profiles ?? []}
-        submitting={submitting}
-      />
-      <TaskDetailModal
-        open={!!activeTask}
-        onClose={() => setActiveTask(null)}
-        task={activeTask}
-        projectName={activeTask ? projectMap.get(activeTask.project_id) : undefined}
-        assigneeName={activeTask ? profileMap.get(activeTask.assigned_to ?? '') : undefined}
-        profiles={profiles ?? []}
-        onChanged={refetch}
-      />
+      {tab === 'recurring' && <RecurringTasksPanel />}
+      {tab === 'calendar' && <WeeklyCalendar />}
     </div>
   );
 }

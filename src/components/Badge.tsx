@@ -123,3 +123,33 @@ export function isOverdue(dueDate: string | null, status: string): boolean {
   today.setHours(0, 0, 0, 0);
   return new Date(dueDate) < today;
 }
+
+export function occurrenceStatusColor(status: string): SemanticColor {
+  switch (status) {
+    case 'DONE':
+      return 'green';
+    case 'IN_PROGRESS':
+      return 'yellow';
+    case 'SKIPPED':
+      return 'gray';
+    case 'PENDING':
+      return 'blue';
+    default:
+      return 'gray';
+  }
+}
+
+export function occurrenceStatusLabel(status: string): string {
+  switch (status) {
+    case 'DONE':
+      return 'Completada';
+    case 'IN_PROGRESS':
+      return 'En progreso';
+    case 'SKIPPED':
+      return 'Omitida';
+    case 'PENDING':
+      return 'Pendiente';
+    default:
+      return status;
+  }
+}

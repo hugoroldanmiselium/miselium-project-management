@@ -4,10 +4,13 @@ import type {
   ActivityLog,
   Client,
   Notification,
+  OccurrenceStatus,
   Profile,
   Project,
   ProjectMember,
   ProjectStatus,
+  RecurringTask,
+  RecurringTaskOccurrence,
   Role,
   Task,
   TaskComment,
@@ -250,4 +253,70 @@ export const fetchCommentsForTask = async (taskId: string): Result<TaskComment[]
 export const createComment = async (input: { task_id: string; user_id: string; body: string }): Result<TaskComment> => {
   const { data, error } = await supabase.from('task_comments').insert(input).select().single();
   return { data: data as TaskComment | null, error };
+};
+
+// ===== Recurring tasks =====
+export const fetchRecurringTasks = async (): Result<RecurringTask[]> => {
+  const { data, error } = await supabase.from('recurring_tasks').select('*').order('name', { ascending: true });
+  return { data: data as RecurringTask[] | null, error };
+};
+
+export const createRecurringTask = async (input: Partial<RecurringTask>): Result<RecurringTask> => {
+  const { data, error } = await supabase.from('recurring_tasks').insert(input).select().single();
+  return { data: data as RecurringTask | null, error };
+};
+
+export const updateRecurringTask = async (id: string, input: Partial<RecurringTask>): Result<RecurringTask> => {
+  const { data, error } = await supabase.from('recurring_tasks').update(input).eq('id', id).select().single();
+  return { data: data as RecurringTask | null, error };
+};
+
+export const deleteRecurringTask = (id: string) => supabase.from('recurring_tasks').delete().eq('id', id);
+
+// ===== Recurring task occurrences =====
+// Pending occurrences are never pre-generated - see 010_recurring_tasks.sql.
+// Fetch only the persisted rows (status overrides) for a set of recurring
+// task ids within a date range; the frontend overlays these onto the
+// computed "virtual" PENDING occurrences (src/lib/recurringDates.ts).
+export const fetchOccurrencesInRange = async (
+  recurringTaskIds: string[],
+  fromDate: string,
+  toDate: string
+): Result<RecurringTaskOccurrence[]> => {
+  if (recurringTaskIds.length === 0) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('recurring_task_occurrences')
+    .select('*')
+    .in('recurring_task_id', recurringTaskIds)
+    .gte('occurrence_date', fromDate)
+    .lte('occurrence_date', toDate);
+  return { data: data as RecurringTaskOccurrence[] | null, error };
+};
+
+export const fetchOccurrenceHistory = async (recurringTaskId: string): Result<RecurringTaskOccurrence[]> => {
+  const { data, error } = await supabase
+    .from('recurring_task_occurrences')
+    .select('*')
+    .eq('recurring_task_id', recurringTaskId)
+    .order('occurrence_date', { ascending: false });
+  return { data: data as RecurringTaskOccurrence[] | null, error };
+};
+
+// Upsert on (recurring_task_id, occurrence_date) - the only way an
+// occurrence's status is ever changed. Safe to call repeatedly for the same
+// date (e.g. revisiting the same week) since the DB has a unique constraint
+// on that pair; never creates a duplicate row.
+export const setOccurrenceStatus = async (input: {
+  recurring_task_id: string;
+  occurrence_date: string;
+  status: OccurrenceStatus;
+  completed_at: string | null;
+  completed_by: string | null;
+}): Result<RecurringTaskOccurrence> => {
+  const { data, error } = await supabase
+    .from('recurring_task_occurrences')
+    .upsert(input, { onConflict: 'recurring_task_id,occurrence_date' })
+    .select()
+    .single();
+  return { data: data as RecurringTaskOccurrence | null, error };
 };
