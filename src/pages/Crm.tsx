@@ -114,7 +114,7 @@ export function Crm() {
   ];
 
   return (
-    <div>
+    <div className="crm-scope">
       <div className="page-header">
         <div>
           <h1>CRM</h1>
@@ -135,15 +135,16 @@ export function Crm() {
       </div>
 
       <div className="stat-grid mb-6">
-        <StatCard label="Contactos" value={kpis.total} icon={<Users2 size={14} />} />
+        <StatCard label="Contactos" value={kpis.total} icon={<Users2 size={14} />} accent="purple" />
         <StatCard
           label="Valor comercial potencial"
           value={formatMXN(kpis.potentialValue)}
           icon={<Wallet2 size={14} />}
           delta="Estimado, no es un ingreso real"
+          accent="green"
         />
-        <StatCard label="Seguimientos hoy" value={kpis.today} icon={<CalendarClock size={14} />} />
-        <StatCard label="Vencidos" value={kpis.overdue} icon={<AlertTriangle size={14} />} />
+        <StatCard label="Seguimientos hoy" value={kpis.today} icon={<CalendarClock size={14} />} accent="amber" />
+        <StatCard label="Vencidos" value={kpis.overdue} icon={<AlertTriangle size={14} />} accent={kpis.overdue > 0 ? 'red' : undefined} />
       </div>
 
       <div className="page-header">

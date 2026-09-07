@@ -184,10 +184,11 @@ export function ProjectDetail() {
         </div>
         <div className="card card-padded">
           <h3 className="mb-2">Progreso</h3>
-          <ProjectProgress percent={progress} />
-          <div className="text-small text-muted mt-2">
-            {(tasks ?? []).filter((t) => t.status === 'DONE').length} de {(tasks ?? []).length} tareas completadas
-          </div>
+          <ProjectProgress
+            percent={progress}
+            done={(tasks ?? []).filter((t) => t.status === 'DONE').length}
+            total={(tasks ?? []).length}
+          />
         </div>
       </div>
 

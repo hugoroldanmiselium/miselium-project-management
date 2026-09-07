@@ -35,7 +35,9 @@ export function Table<T>({ columns, rows, rowKey, onRowClick }: TableProps<T>) {
               onClick={() => onRowClick?.(row)}
             >
               {columns.map((col) => (
-                <td key={col.key}>{col.render(row)}</td>
+                <td key={col.key} data-label={col.header}>
+                  {col.render(row)}
+                </td>
               ))}
             </tr>
           ))}

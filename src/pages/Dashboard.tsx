@@ -145,11 +145,11 @@ export function Dashboard() {
       </div>
 
       <div className="stat-grid mb-6">
-        <StatCard label="Proyectos activos" value={activeProjects} icon={<FolderKanban size={14} />} delta={`de ${scopedProjects.length} totales`} />
+        <StatCard label="Proyectos activos" value={activeProjects} icon={<FolderKanban size={14} />} delta={`de ${scopedProjects.length} totales`} accent="blue" />
         <StatCard label="Tareas pendientes" value={pendingTasks} icon={<ListTodo size={14} />} delta="por completar" />
-        <StatCard label="Tareas vencidas" value={overdueTasks} icon={<AlertTriangle size={14} />} delta="requieren atencion" />
-        <StatCard label="% de entrega" value={`${deliveryRate}%`} icon={<CheckCircle2 size={14} />} delta={`${completedTasks} completadas`} />
-        <StatCard label="Horas pendientes" value={`${pendingHours}h`} icon={<Hourglass size={14} />} delta="estimadas, sin completar" />
+        <StatCard label="Tareas vencidas" value={overdueTasks} icon={<AlertTriangle size={14} />} delta="requieren atencion" accent={overdueTasks > 0 ? 'red' : 'green'} />
+        <StatCard label="% de entrega" value={`${deliveryRate}%`} icon={<CheckCircle2 size={14} />} delta={`${completedTasks} completadas`} accent="green" />
+        <StatCard label="Horas pendientes" value={`${pendingHours}h`} icon={<Hourglass size={14} />} delta="estimadas, sin completar" accent="amber" />
         <StatCard
           label="Capacidad diaria"
           value={`${dailyCapacity}h`}

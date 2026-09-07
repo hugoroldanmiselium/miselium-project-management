@@ -1,57 +1,79 @@
 :root {
-  /* Neutrals */
-  --color-white: #ffffff;
-  --color-black: #0a0a0a;
-  --color-bg: #fafafa;
+  /* ============================================================
+     MISELIUM — QUIET SYSTEMS
+     Japanese minimalism x Swiss precision x quiet luxury.
+     Palette stays mostly ivory + white + ink; color is reserved
+     for status, progress and alerts — never decoration.
+     ============================================================ */
+
+  /* ---- Brief palette (primary reference names) ---- */
+  --color-bg: #f5f3ee;
   --color-surface: #ffffff;
-  --color-border: #e5e5e5;
-  --color-border-strong: #d4d4d4;
-  --color-text: #171717;
-  --color-text-secondary: #6b6b6b;
-  --color-text-muted: #a3a3a3;
+  --color-surface-soft: #f0eee8;
+  --color-ink: #171717;
+  --color-text: #343434;
+  --color-muted: #77756f;
+  --color-border: #ddd8d0;
+  --color-border-soft: #e9e6de;
 
-  --color-gray-50: #fafafa;
-  --color-gray-100: #f5f5f5;
-  --color-gray-200: #e5e5e5;
-  --color-gray-300: #d4d4d4;
-  --color-gray-400: #a3a3a3;
-  --color-gray-500: #737373;
-  --color-gray-600: #525252;
-  --color-gray-700: #404040;
-  --color-gray-800: #262626;
-  --color-gray-900: #171717;
+  --color-green: #176b55;
+  --color-blue: #3157ff;
+  --color-amber: #d69a24;
+  --color-red: #c94b35;
 
-  /* Pastel semantic colors - charts/badges ONLY */
-  --color-blue: #5b8def;
-  --color-blue-bg: #eaf1fe;
-  --color-blue-text: #2a5ec2;
+  /* CRM accent — subtle violet, reused from the previous system's
+     purple token rather than inventing a new hue */
+  --color-purple: #6c4fb0;
 
-  --color-green: #4caf7d;
-  --color-green-bg: #e8f6ee;
-  --color-green-text: #2f8a5c;
+  /* ---- Legacy variable names kept as aliases so every existing
+     component/page (which reference these names directly) inherits
+     the new palette automatically, with zero JSX/logic changes ---- */
+  --color-white: var(--color-surface);
+  --color-black: var(--color-ink);
+  --color-border-strong: #c9c4b8;
+  --color-text-secondary: var(--color-muted);
+  --color-text-muted: #96938a;
 
-  --color-yellow: #e0b23d;
-  --color-yellow-bg: #fdf5e3;
-  --color-yellow-text: #a67a1c;
+  --color-gray-50: var(--color-surface-soft);
+  --color-gray-100: #eae7e0;
+  --color-gray-200: var(--color-border);
+  --color-gray-300: #c9c4b8;
+  --color-gray-400: #a6a297;
+  --color-gray-500: var(--color-muted);
+  --color-gray-600: #5c594f;
+  --color-gray-700: #454339;
+  --color-gray-800: #2c2a24;
+  --color-gray-900: var(--color-ink);
 
-  --color-red: #e0645a;
-  --color-red-bg: #fdecea;
-  --color-red-text: #c23b30;
+  /* Semantic colors used by Badge/status system: soft bg + readable text,
+     mapped onto the new palette's four accent hues */
+  --color-yellow: var(--color-amber);
+  --color-yellow-bg: #f8ecd4;
+  --color-yellow-text: #8a660f;
 
-  --color-purple: #9a7fd1;
-  --color-purple-bg: #f2eefb;
-  --color-purple-text: #6c4fb0;
+  --color-green-bg: #dcece5;
+  --color-green-text: #10513f;
 
-  /* Radius */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
+  --color-blue-bg: #e2e7ff;
+  --color-blue-text: #1f3bc7;
 
-  /* Shadows (minimal) */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --color-red-bg: #f5dfd9;
+  --color-red-text: #9c3924;
 
-  /* Spacing scale */
+  --color-purple-bg: #ebe5f7;
+  --color-purple-text: #5a3f96;
+
+  /* ---- Radius (10-14px, quiet rounding — never pill-heavy cards) ---- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+
+  /* ---- Shadows — extremely subtle, no heavy elevation ---- */
+  --shadow-sm: 0 1px 2px rgba(23, 23, 23, 0.04);
+  --shadow-md: 0 4px 16px rgba(23, 23, 23, 0.07);
+  --shadow-hover: 0 2px 10px rgba(23, 23, 23, 0.06);
+
+  /* ---- Spacing scale — generous, "respirada pero eficiente" ---- */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -62,16 +84,25 @@
   --space-10: 40px;
   --space-12: 48px;
 
-  /* Layout */
-  --sidebar-width: 240px;
-  --header-height: 64px;
+  /* ---- Layout ---- */
+  --sidebar-width: 252px;
+  --header-height: 68px;
+  --bottom-nav-height: 62px;
+
+  /* ---- Motion — transform/opacity/color only, nothing heavy in loops ---- */
+  --ease-quiet: cubic-bezier(0.2, 0, 0.2, 1);
+  --transition-fast: 150ms var(--ease-quiet);
+  --transition-base: 200ms var(--ease-quiet);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #fafafa;
+    /* This app is intentionally light-only (ivory paper aesthetic) —
+       keep the same values in a "dark OS" context rather than
+       inventing an unreviewed dark palette this round. */
+    --color-bg: #f5f3ee;
     --color-surface: #ffffff;
-    --color-text: #171717;
+    --color-text: #343434;
   }
 }
 
@@ -98,4 +129,35 @@ a {
 
 button {
   font-family: inherit;
+}
+
+/* Extremely subtle paper grain — almost imperceptible, pure CSS,
+   fixed so it never affects layout/scroll or repaints on scroll. */
+body {
+  position: relative;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.025;
+  background-image: repeating-linear-gradient(
+      0deg,
+      #000 0px,
+      transparent 1px,
+      transparent 2px
+    ),
+    repeating-linear-gradient(90deg, #000 0px, transparent 1px, transparent 2px);
+}
+
+::selection {
+  background: var(--color-blue);
+  color: var(--color-surface);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-blue);
+  outline-offset: 2px;
 }

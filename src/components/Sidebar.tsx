@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-const navItems = [
+export const navItems = [
   { to: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/app/today', label: 'Hoy', icon: CalendarCheck },
   { to: '/app/projects', label: 'Proyectos', icon: FolderKanban },
@@ -45,23 +45,19 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
               className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
               onClick={onClose}
             >
-              <item.icon size={17} />
+              <item.icon size={17} strokeWidth={1.75} />
               {item.label}
             </NavLink>
           ))}
         </nav>
         <div className="sidebar-divider" />
         <div className="sidebar-footer">
-          <button className="sidebar-link" style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}>
-            <Settings size={17} />
+          <button className="sidebar-link sidebar-link-btn">
+            <Settings size={17} strokeWidth={1.75} />
             Configuracion
           </button>
-          <button
-            className="sidebar-link"
-            style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}
-            onClick={() => signOut()}
-          >
-            <LogOut size={17} />
+          <button className="sidebar-link sidebar-link-btn" onClick={() => signOut()}>
+            <LogOut size={17} strokeWidth={1.75} />
             Cerrar sesion
           </button>
         </div>

@@ -75,21 +75,23 @@ export function FinanceDashboardPanel({ incomes, expenses, taxProvisions }: Prop
       )}
 
       <div className="stat-grid mb-6">
-        <StatCard label="Ingresos" value={formatMXN(totalIncome)} icon={<TrendingUp size={14} />} delta={`${incomesInRange.length} movimientos`} />
-        <StatCard label="Egresos" value={formatMXN(totalExpense)} icon={<TrendingDown size={14} />} delta={`${expensesInRange.length} movimientos`} />
+        <StatCard label="Ingresos" value={formatMXN(totalIncome)} icon={<TrendingUp size={14} />} delta={`${incomesInRange.length} movimientos`} accent="green" />
+        <StatCard label="Egresos" value={formatMXN(totalExpense)} icon={<TrendingDown size={14} />} delta={`${expensesInRange.length} movimientos`} accent="red" />
         <StatCard label="Gastos" value={formatMXN(totalExpense)} icon={<Receipt size={14} />} delta="ver desglose en Analisis" />
-        <StatCard label="Impuestos" value={formatMXN(totalTaxes)} icon={<Landmark size={14} />} delta="provisiones del periodo" />
+        <StatCard label="Impuestos" value={formatMXN(totalTaxes)} icon={<Landmark size={14} />} delta="provisiones del periodo" accent="amber" />
         <StatCard
           label="Utilidad neta"
           value={formatMXN(netProfit)}
           icon={<PiggyBank size={14} />}
           delta="Ingresos - Egresos - Impuestos"
+          accent={netProfit >= 0 ? 'green' : 'red'}
         />
         <StatCard
           label="Flujo de efectivo"
           value={formatMXN(cashFlow)}
           icon={<Wallet size={14} />}
           delta={`Cobrado ${formatMXN(cashIn)} - Pagado ${formatMXN(cashOut)}`}
+          accent={cashFlow >= 0 ? 'blue' : 'amber'}
         />
       </div>
 
