@@ -32,6 +32,12 @@ under `supabase/migrations/`:
   `recurring_task_occurrences` (materialized status overrides) tables, RLS, and the
   `is_recurring_task_in_org()` / `is_recurring_task_assignee()` helpers — see "Weekly recurring
   tasks" below and `SECURITY.md` for the full policy table and live verification.
+- `011_finance_module.sql` — Finanzas module: `incomes`/`expenses`/`tax_provisions`/
+  `finance_categories`, `profiles.finance_access`, `has_finance_access()` — see "Finanzas module"
+  below.
+- `012_crm_module.sql` — extremely simple CRM: new `contacts`/`contact_interactions` tables, RLS,
+  and the `is_contact_in_org()` helper — see "CRM module" below and `SECURITY.md` for the full
+  policy table and live verification.
 
 ## Tables
 
@@ -423,10 +429,78 @@ restricted to ADMIN-only beyond what finance access already implies — anyone w
 (ADMIN implicitly, or `finance_access = true`) can delete their own org's finance rows, since the
 spec's "Finanzas: crear/editar/consultar" grant doesn't carve out a narrower delete tier.
 
+## CRM module (`012_crm_module.sql`)
+
+Extremely simple CRM per the human's spec: "Se quien es, como contactarlo, cuanto podria valer y
+cuando debo volver a hablarle." Deliberately NOT a pipeline/stages/lead-scoring/marketing-automation
+tool. Two tables:
+
+### `contacts`
+A top-level, org-scoped entity - same direct-`organization_id` pattern as `clients`/`projects`
+(see "Multi-tenancy" below), not derived through another table.
+
+| column | type | notes |
+|--------|------|-------|
+| id | uuid PK |
+| organization_id | uuid FK → organizations.id, not null |
+| name | text, not null | the only required field, per spec |
+| phone / whatsapp / email | text, nullable | none required |
+| company | text, nullable | free text ("empresa/actividad") |
+| potential_value | numeric(12,2), nullable | "Valor comercial potencial" - an **estimate of opportunity, never a real income figure**; deliberately never integrated into Finanzas/`incomes` - kept fully separate per spec section 15 |
+| last_contact_date | date, nullable | set to today automatically by "Registrar contacto" |
+| next_followup_at | timestamptz, nullable | has both date AND time (spec's "10 AM" example needs a time-of-day, unlike `incomes.due_date` which is date-only) |
+| notes | text, nullable |
+| created_by / updated_by | uuid FK → profiles.id |
+| created_at / updated_at | timestamptz | `updated_at` auto-updated via the existing `set_updated_at()` trigger |
+
+**Status (🔴 vencido / 🟡 hoy / 🟢 proximo / ⚪ sin seguimiento) is never stored** - it's pure
+derived state computed client-side from `next_followup_at` vs. "now"
+(`src/lib/crmUtils.ts`'s `followupStatus()`), following the same convention as `recurringDates.ts`/
+`financeUtils.ts` keeping all derived date state out of the DB. Since nothing ever auto-resolves a
+followup, "vencido" persists exactly as long as `next_followup_at` stays in the past - it only
+changes when a user reprograms the followup or registers a new contact, matching the spec's "no se
+auto-resuelven solos."
+
+### `contact_interactions`
+The "historial minimo" (spec section 10) - one row per logged interaction, immutable/append-only
+(no update/delete policy, same as `task_comments`).
+
+| column | type | notes |
+|--------|------|-------|
+| id | uuid PK |
+| contact_id | uuid FK → contacts.id, **on delete cascade** |
+| note | text, not null |
+| user_id | uuid FK → profiles.id, not null |
+| created_at | timestamptz |
+
+Displayed newest-first in the contact detail view.
+
+### Permissions (see `SECURITY.md` for the full policy text and live verification)
+Unlike Finanzas, this maps cleanly onto the **existing** 3-tier role system - no new
+`*_access` flag was needed. ADMIN/PROJECT_MANAGER (`current_role_is_admin_or_pm()`) can fully
+create/edit/delete contacts; COLLABORATOR can view every contact in their org and "gestionar" in
+the limited sense of logging an interaction ("Registrar contacto") or moving the next-followup date
+("Programar seguimiento") - mirroring how a COLLABORATOR can update their own assigned task's
+`status` (`tasks_update`) without holding full task-manage rights.
+
+The COLLABORATOR write path only ever touches `contacts.last_contact_date`/`next_followup_at` (plus
+`updated_by`/`updated_at`). Postgres RLS has no native column-level grant, so this is enforced with
+the same technique `profiles_update_self_name` already uses to stop a self-rename from touching
+`role`/`daily_available_hours`/`organization_id`/`finance_access`: a `WITH CHECK` clause requiring
+every other column to still equal its currently-stored value (via a correlated subquery, which
+reads pre-update state). This is real column-level RLS enforcement, verified live with a direct
+REST `PATCH` from a COLLABORATOR account (see `SECURITY.md`) - not just a UI affordance.
+
+"Registrar contacto" (spec section 7) is one compact form that, on submit, does two writes from the
+app (not a single DB transaction, matching how e.g. `Tasks.tsx`'s create-task-then-log-activity
+already does two sequential calls elsewhere in this codebase): an `update` on `contacts`
+(`last_contact_date` = today, optionally `next_followup_at`) and an `insert` into
+`contact_interactions`.
+
 ## Re-running migrations
 
 If the schema needs to be reapplied (e.g. against a fresh Supabase project), run the SQL files in
-order (`001` through `011`) against the Management API SQL endpoint:
+order (`001` through `012`) against the Management API SQL endpoint:
 
 ```bash
 curl -s -X POST \
@@ -438,7 +512,8 @@ curl -s -X POST \
 
 (repeat for `002_rls.sql`, then `003_seed.sql`, `004_replace_demo_users.sql`, `005_agency_features.sql`,
 `006_task_estimation_capacity.sql`, `007_organizations_and_role_tiers.sql`, `008_org_scoped_rls.sql`,
-`009_second_organization.sql`, `010_recurring_tasks.sql`, `011_finance_module.sql`, in order). All files are idempotent-ish — schema uses
+`009_second_organization.sql`, `010_recurring_tasks.sql`, `011_finance_module.sql`,
+`012_crm_module.sql`, in order). All files are idempotent-ish — schema uses
 `create table if not exists` / `create index if not exists`, RLS policies use `drop policy if
 exists` before `create policy`, and seed inserts guard with `where not exists (...)` — so they
 can be safely re-run without duplicating data (though re-running against a project that already

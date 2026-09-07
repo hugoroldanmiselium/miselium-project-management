@@ -7,6 +7,7 @@ import {
   Users,
   UsersRound,
   Wallet,
+  Contact2,
   Settings,
   LogOut,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ const navItems = [
   { to: '/app/projects', label: 'Proyectos', icon: FolderKanban },
   { to: '/app/tasks', label: 'Tareas', icon: ListChecks },
   { to: '/app/clients', label: 'Clientes', icon: Users },
+  { to: '/app/crm', label: 'CRM', icon: Contact2 },
   { to: '/app/team', label: 'Equipo', icon: UsersRound },
 ];
 

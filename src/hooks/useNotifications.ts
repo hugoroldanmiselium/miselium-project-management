@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchNotifications, fetchTasksForUser, markAllNotificationsRead, markNotificationRead } from '../lib/queries';
+import { fetchContacts, fetchNotifications, fetchTasksForUser, markAllNotificationsRead, markNotificationRead } from '../lib/queries';
+import { followupStatus } from '../lib/crmUtils';
 import type { Notification } from '../types/database';
 
 export interface BellNotification {
@@ -32,13 +33,17 @@ export function useNotifications() {
   const [dueSoonTaskIds, setDueSoonTaskIds] = useState<Set<string>>(new Set());
   const [dismissedDueSoon, setDismissedDueSoon] = useState<Set<string>>(new Set());
   const [dueSoonTitles, setDueSoonTitles] = useState<Map<string, string>>(new Map());
+  const [crmFollowupIds, setCrmFollowupIds] = useState<Set<string>>(new Set());
+  const [dismissedCrmFollowup, setDismissedCrmFollowup] = useState<Set<string>>(new Set());
+  const [crmFollowupInfo, setCrmFollowupInfo] = useState<Map<string, { name: string; overdue: boolean }>>(new Map());
 
   const load = useCallback(async () => {
     if (!profile) return;
     setLoading(true);
-    const [{ data: notifs }, { data: tasks }] = await Promise.all([
+    const [{ data: notifs }, { data: tasks }, { data: contacts }] = await Promise.all([
       fetchNotifications(profile.id),
       fetchTasksForUser(profile.id),
+      fetchContacts(),
     ]);
     setPersisted(notifs ?? []);
 
@@ -59,6 +64,24 @@ export function useNotifications() {
     });
     setDueSoonTaskIds(ids);
     setDueSoonTitles(titles);
+
+    // CRM "seguimientos de hoy"/"vencidos" - same client-side, no-cron
+    // pattern as due-soon tasks above (see hook doc comment). Optional
+    // secondary surface: the CRM dashboard's own KPIs are the primary,
+    // required mechanism (spec section 8) - this just mirrors that into the
+    // bell for visibility, same as tasks already do.
+    const crmIds = new Set<string>();
+    const crmInfo = new Map<string, { name: string; overdue: boolean }>();
+    (contacts ?? []).forEach((c) => {
+      const status = followupStatus(c.next_followup_at);
+      if (status === 'TODAY' || status === 'OVERDUE') {
+        crmIds.add(c.id);
+        crmInfo.set(c.id, { name: c.name, overdue: status === 'OVERDUE' });
+      }
+    });
+    setCrmFollowupIds(crmIds);
+    setCrmFollowupInfo(crmInfo);
+
     setLoading(false);
   }, [profile]);
 
@@ -85,14 +108,33 @@ export function useNotifications() {
         created_at: new Date().toISOString(),
         virtual: true,
       }));
-    return [...fromDueSoon, ...fromServer].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-  }, [persisted, dueSoonTaskIds, dueSoonTitles, dismissedDueSoon]);
+    const fromCrmFollowup: BellNotification[] = Array.from(crmFollowupIds)
+      .filter((contactId) => !dismissedCrmFollowup.has(contactId))
+      .map((contactId) => {
+        const info = crmFollowupInfo.get(contactId);
+        return {
+          id: `crmfollowup-${contactId}`,
+          message: info?.overdue
+            ? `Seguimiento vencido con "${info?.name}"`
+            : `Seguimiento hoy con "${info?.name}"`,
+          link: '/app/crm',
+          read: false,
+          created_at: new Date().toISOString(),
+          virtual: true,
+        };
+      });
+    return [...fromDueSoon, ...fromCrmFollowup, ...fromServer].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  }, [persisted, dueSoonTaskIds, dueSoonTitles, dismissedDueSoon, crmFollowupIds, crmFollowupInfo, dismissedCrmFollowup]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   async function markRead(n: BellNotification) {
     if (n.virtual) {
-      setDismissedDueSoon((prev) => new Set(prev).add(n.id.replace('duesoon-', '')));
+      if (n.id.startsWith('crmfollowup-')) {
+        setDismissedCrmFollowup((prev) => new Set(prev).add(n.id.replace('crmfollowup-', '')));
+      } else {
+        setDismissedDueSoon((prev) => new Set(prev).add(n.id.replace('duesoon-', '')));
+      }
       return;
     }
     if (!n.read) {
@@ -106,6 +148,7 @@ export function useNotifications() {
     await markAllNotificationsRead(profile.id);
     setPersisted((prev) => prev.map((p) => ({ ...p, read: true })));
     setDismissedDueSoon(new Set(dueSoonTaskIds));
+    setDismissedCrmFollowup(new Set(crmFollowupIds));
   }
 
   return { notifications, unreadCount, loading, markRead, markAllRead, refetch: load };

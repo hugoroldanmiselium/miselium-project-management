@@ -3,6 +3,8 @@ import { supabase } from './supabase';
 import type {
   ActivityLog,
   Client,
+  Contact,
+  ContactInteraction,
   Expense,
   FinanceCategory,
   FinanceCategoryType,
@@ -404,3 +406,45 @@ export const updateTaxProvision = async (id: string, input: Partial<TaxProvision
 };
 
 export const deleteTaxProvision = (id: string) => supabase.from('tax_provisions').delete().eq('id', id);
+
+// ===== CRM: contacts =====
+export const fetchContacts = async (): Result<Contact[]> => {
+  const { data, error } = await supabase.from('contacts').select('*').order('name', { ascending: true });
+  return { data: data as Contact[] | null, error };
+};
+
+export const fetchContact = async (id: string): Result<Contact> => {
+  const { data, error } = await supabase.from('contacts').select('*').eq('id', id).single();
+  return { data: data as Contact | null, error };
+};
+
+export const createContact = async (input: Partial<Contact>): Result<Contact> => {
+  const { data, error } = await supabase.from('contacts').insert(input).select().single();
+  return { data: data as Contact | null, error };
+};
+
+export const updateContact = async (id: string, input: Partial<Contact>): Result<Contact> => {
+  const { data, error } = await supabase.from('contacts').update(input).eq('id', id).select().single();
+  return { data: data as Contact | null, error };
+};
+
+export const deleteContact = (id: string) => supabase.from('contacts').delete().eq('id', id);
+
+// ===== CRM: contact interactions ("registrar contacto" history) =====
+export const fetchInteractionsForContact = async (contactId: string): Result<ContactInteraction[]> => {
+  const { data, error } = await supabase
+    .from('contact_interactions')
+    .select('*')
+    .eq('contact_id', contactId)
+    .order('created_at', { ascending: false });
+  return { data: data as ContactInteraction[] | null, error };
+};
+
+export const createContactInteraction = async (input: {
+  contact_id: string;
+  note: string;
+  user_id: string;
+}): Result<ContactInteraction> => {
+  const { data, error } = await supabase.from('contact_interactions').insert(input).select().single();
+  return { data: data as ContactInteraction | null, error };
+};

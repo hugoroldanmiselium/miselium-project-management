@@ -139,6 +139,21 @@ export function occurrenceStatusColor(status: string): SemanticColor {
   }
 }
 
+export function followupStatusColor(status: string): SemanticColor {
+  switch (status) {
+    case 'OVERDUE':
+      return 'red';
+    case 'TODAY':
+      return 'yellow';
+    case 'UPCOMING':
+      return 'green';
+    case 'NONE':
+      return 'gray';
+    default:
+      return 'gray';
+  }
+}
+
 export function occurrenceStatusLabel(status: string): string {
   switch (status) {
     case 'DONE':

@@ -12,6 +12,7 @@ import { Clients } from './pages/Clients';
 import { ClientDetail } from './pages/ClientDetail';
 import { Team } from './pages/Team';
 import { Finance } from './pages/Finance';
+import { Crm } from './pages/Crm';
 import { NotFound } from './pages/NotFound';
 
 function App() {
@@ -39,6 +40,7 @@ function App() {
             <Route path="clients/:id" element={<ClientDetail />} />
             <Route path="team" element={<Team />} />
             <Route path="finanzas" element={<Finance />} />
+            <Route path="crm" element={<Crm />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -1,8 +1,8 @@
 # Miselium Operations v0.1
 
 Internal operations tool for Miselium: clients, projects, tasks, assignees, statuses, dates,
-progress, a role-scoped dashboard, and 3-tier permissions. Not a full ERP/CRM/Jira — deliberately
-minimal. As of Fase 2, the app is also multi-tenant: every organization's clients/projects/tasks/
+progress, a role-scoped dashboard, finances, an extremely simple CRM, and 3-tier permissions. Not a
+full ERP/Salesforce/Jira — deliberately minimal. As of Fase 2, the app is also multi-tenant: every organization's clients/projects/tasks/
 team are isolated from every other organization at the database (RLS) level, not just hidden in
 the UI — see "Multi-tenancy" below and `SECURITY.md`.
 
@@ -101,6 +101,25 @@ Deliberately not double-entry bookkeeping, bank reconciliation, CFDI, or SAT int
 per-user flag orthogonal to the existing role system, not a 4th role tier) and its live RLS
 verification.
 
+## CRM module
+
+An extremely simple CRM (`/app/crm`) — "se quien es, como contactarlo, cuanto podria valer y cuando
+debo volver a hablarle." No pipelines, no stages, no lead scoring, no marketing automation. Each
+contact has a name (only required field), phone/WhatsApp/email, empresa/actividad, "Valor comercial
+potencial" (an estimate, kept fully separate from Finanzas — never a real income figure), ultimo
+contacto, proximo seguimiento, and notes. The list shows an automatically-computed status badge (🔴
+vencido / 🟡 hoy / 🟢 proximo / ⚪ sin seguimiento — never set manually), with search and filter
+chips. "Registrar contacto" is a single compact form (note + optional next-followup) that updates
+last-contact and logs history in one step; "Programar seguimiento" just moves the followup date
+without requiring a note. Dashboard KPIs: Contactos, Valor comercial potencial, Seguimientos hoy,
+Vencidos.
+
+Permissions reuse the existing role tiers directly (no new access flag, unlike Finanzas):
+ADMIN/PROJECT_MANAGER can create/edit/delete contacts, COLLABORATOR can view all contacts in their
+org and register interactions/reschedule followups. See `DATABASE.md` for the schema and
+`SECURITY.md` for the RLS policy table (including the column-level restriction on the
+COLLABORATOR write path) and its live verification.
+
 ## Stack
 
 - **Frontend:** React 19 + TypeScript + Vite
@@ -173,7 +192,7 @@ src/
   routes/            ProtectedRoute (auth guard)
   lib/                supabase client, typed query functions
   pages/             one file per route (Dashboard, Today, Projects, ProjectDetail, Tasks,
-                      Clients, ClientDetail, Team, Finance, Login, NotFound)
+                      Clients, ClientDetail, Team, Finance, Crm, Login, NotFound)
   types/database.ts  hand-written row types matching the Postgres schema
 supabase/migrations/ SQL run against the live project (schema, RLS, seed)
 ```
@@ -195,6 +214,8 @@ See `ARCHITECTURE.md`, `DATABASE.md`, and `SECURITY.md` for deeper detail on eac
 /app/team
 /app/finanzas           (tabs: Dashboard / Ingresos / Egresos / Impuestos / Cuentas por cobrar /
                           Cuentas por pagar / Analisis — only for ADMIN or finance_access = true)
+/app/crm                (contactos y prospectos — visible a todos; crear/editar/eliminar solo
+                          ADMIN/PROJECT_MANAGER)
 ```
 
 ## Roles

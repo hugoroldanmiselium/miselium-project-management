@@ -190,6 +190,32 @@ export interface Expense {
   updated_at: string;
 }
 
+export interface Contact {
+  id: string;
+  organization_id: string;
+  name: string;
+  phone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+  company: string | null;
+  potential_value: number | null;
+  last_contact_date: string | null;
+  next_followup_at: string | null;
+  notes: string | null;
+  created_by: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContactInteraction {
+  id: string;
+  contact_id: string;
+  note: string;
+  user_id: string;
+  created_at: string;
+}
+
 export interface TaxProvision {
   id: string;
   organization_id: string;
@@ -239,6 +265,8 @@ export interface Database {
       incomes: { Row: Income; Insert: Partial<Income>; Update: Partial<Income> };
       expenses: { Row: Expense; Insert: Partial<Expense>; Update: Partial<Expense> };
       tax_provisions: { Row: TaxProvision; Insert: Partial<TaxProvision>; Update: Partial<TaxProvision> };
+      contacts: { Row: Contact; Insert: Partial<Contact>; Update: Partial<Contact> };
+      contact_interactions: { Row: ContactInteraction; Insert: Partial<ContactInteraction>; Update: Partial<ContactInteraction> };
     };
   };
 }

@@ -461,6 +461,88 @@ Per the spec's explicit requirement, `tax_provisions` is never presented as an o
 The Impuestos tab and its create/edit form both show a persistent disclaimer:
 "Estimacion financiera / provision fiscal interna — no constituye una declaracion fiscal oficial."
 
+## CRM module (`012_crm_module.sql`)
+
+### Permission model
+Unlike Finanzas, the spec's "Admin ve/crea/edita/elimina. Usuario autorizado consulta y gestiona
+según permisos existentes" maps cleanly onto the role tiers that already exist — no orthogonal
+access flag was needed. `current_role_is_admin_or_pm()` (reused as-is from
+`008_org_scoped_rls.sql`) gates full contact management; any org member (including COLLABORATOR)
+can view and "gestionar" in the narrow sense of logging an interaction or moving the next-followup
+date, mirroring `tasks_update`'s `assigned_to = auth.uid()` carve-out.
+
+### RLS
+| Table | SELECT | INSERT | UPDATE | DELETE |
+|-------|--------|--------|--------|--------|
+| `contacts` | any org member (`organization_id = current_org_id()`) | ADMIN/PM only, org match, `created_by = auth.uid()` | **two OR'd policies**: (a) ADMIN/PM, full row, org match; (b) any org member, org match, but `WITH CHECK` requires `name`/`phone`/`whatsapp`/`email`/`company`/`potential_value`/`notes`/`created_by`/`organization_id` to stay equal to their currently-stored value (only `last_contact_date`/`next_followup_at`/`updated_by`/`updated_at` may change) | ADMIN/PM only, org match |
+| `contact_interactions` | any org member, via `is_contact_in_org(contact_id)` | any org member, `user_id = auth.uid()`, via `is_contact_in_org(contact_id)` | none (immutable history, same as `task_comments`) | none |
+
+**Column-level RLS judgment call**: the spec's "Registrar contacto" quick action needs a
+COLLABORATOR to write `last_contact_date`/`next_followup_at` on a `contacts` row without gaining
+full edit rights (name/value/contact info/notes). Postgres RLS has no native column-level grant.
+Rather than take the "pragmatic" whole-row-open-relying-on-UI-only shortcut, this reuses the
+**already-established** column-restriction technique from `profiles_update_self_name`
+(`007_organizations_and_role_tiers.sql`, extended in `008`/`011`): the narrow UPDATE policy's
+`WITH CHECK` clause compares every other column against a correlated subquery reading the
+currently-stored row, so a COLLABORATOR's write is rejected at the DB level — not just hidden in
+the UI — the instant it touches a column outside the allowed set. Verified live below with a direct
+REST `PATCH`.
+
+### Live-tested against the real project with real JWTs
+
+1. Hugo (Miselium ADMIN) opens CRM with zero console errors, creates a contact via the UI, opens its
+   detail view, uses "Registrar contacto" (note + next-followup datetime) — confirmed
+   `last_contact_date` updated to today, the interaction appears in the history newest-first, and
+   `next_followup_at` updated to the value entered. Dashboard KPI "Seguimientos hoy" and the list's
+   🟡 badge both reflected the same-day followup. Used "Programar seguimiento" to move the followup
+   to yesterday — 🔴/"Vencido" badge appeared immediately and **persisted across a full page
+   reload** (confirms status is derived, never auto-resolved — matches "permanecen visibles hasta
+   que el usuario los reprograme o registre el contacto"). Search by name and every filter chip
+   (Todos/Vencidos/Hoy/Proximos/Sin seguimiento) verified against the live row.
+2. Gerardo (Miselium COLLABORATOR): sidebar shows "CRM"; contact list and detail view are visible;
+   UI correctly hides "Nuevo contacto", "Editar", and "Eliminar"; used "Registrar contacto"
+   successfully (note appeared in history). Direct REST verification (not just UI hiding):
+   - `POST /rest/v1/contacts` (valid org id, his own uid as `created_by`) → **`403`**,
+     `"new row violates row-level security policy for table \"contacts\""`.
+   - `PATCH /rest/v1/contacts?id=eq.<id>` with `{"potential_value": 999999}` → **`403`**, same
+     policy violation.
+   - `PATCH /rest/v1/contacts?id=eq.<id>` with `{"name": "HACKED NAME"}` → **`403`**, same policy
+     violation.
+   - `PATCH /rest/v1/contacts?id=eq.<id>` with `{"last_contact_date": "2020-01-01"}` (the narrow
+     carve-out) → **`200`**, applied successfully — confirming the column-level split works exactly
+     as designed, not just no-op-vs-error by accident.
+   - `DELETE /rest/v1/contacts?id=eq.<id>` → **`200`** with an **empty array** (RLS silently
+     filtered the row out of the delete — 0 rows removed); confirmed via a follow-up query that the
+     contact still existed afterward.
+3. Cross-org isolation: created a throwaway third organization (`Throwaway CRM QA Org`) and one
+   throwaway ADMIN user in it (same `auth.users`/`auth.identities`/`profiles` technique as
+   `009_second_organization.sql`). That user's `GET /rest/v1/contacts` and
+   `GET /rest/v1/contact_interactions` both returned `200` with **0 rows** before creating anything.
+   They created a contact inside their own org — succeeded (`201`). Direct lookup of Miselium's test
+   contact by id returned `200` with **0 rows** (invisible cross-org). An impersonation attempt —
+   `POST /rest/v1/contacts` with Miselium's `organization_id` — was **rejected**, `403`, same RLS
+   violation. Separately, Hugo (Miselium ADMIN) querying `contacts` saw only the Miselium row, never
+   the throwaway org's contact — isolation confirmed in both directions. The throwaway org, its user
+   (`auth.users`/`auth.identities`/`profiles` rows, cascade-deleted via the `auth.users` row), and
+   its one contact row were deleted immediately after.
+4. Full before/after row-count check across every table (not just the 2 new ones) confirmed no
+   leftover rows anywhere: `organizations` = 2, `profiles` = 5, `clients` = 4, `projects` = 5,
+   `project_members` = 11, `tasks` = 18, `activity_log` = 5, `notifications` = 1,
+   `finance_categories` = 34, `incomes`/`expenses`/`tax_provisions`/`recurring_tasks`/
+   `recurring_task_occurrences`/`task_comments`/`time_entries` = 0 each (all unchanged from the
+   pre-round baseline), **`contacts` = 0, `contact_interactions` = 0** (the one real test contact
+   created for Playwright/REST verification, plus the throwaway org's contact, were both deleted).
+   Spot-checked `profiles.role`/`daily_available_hours`/`organization_id`/`finance_access` for all 5
+   real users — all match their pre-round values; no password was touched.
+
+### `useNotifications` extension
+Extended the existing client-side "due soon" pattern (there is no cron in this $0-infra app — see
+the hook's doc comment) to also surface today's/overdue CRM followups in the header bell, the same
+way it already does for tasks: on load, any contact in the user's org with `followupStatus() ===
+'TODAY' | 'OVERDUE'` becomes a dismissible virtual notification linking to `/app/crm`. This is a
+secondary, optional surface — the CRM dashboard's own "Seguimientos hoy"/"Vencidos" KPIs (spec
+section 2) remain the primary, required mechanism for "destacar claramente."
+
 ## Known limitations / out of scope for weekly recurring tasks
 
 - No background job pre-generates future occurrences — by design, see `DATABASE.md`'s
