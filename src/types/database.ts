@@ -5,6 +5,10 @@ export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
 export type BillingType = 'HOURLY' | 'FIXED';
 export type Weekday = 'MON' | 'TUE' | 'WED' | 'THU' | 'FRI' | 'SAT' | 'SUN';
 export type OccurrenceStatus = 'PENDING' | 'IN_PROGRESS' | 'DONE' | 'SKIPPED';
+export type FinanceCategoryType = 'INCOME' | 'EXPENSE';
+export type IncomeStatus = 'COBRADO' | 'PENDIENTE';
+export type ExpenseStatus = 'PAGADO' | 'PENDIENTE';
+export type TaxProvisionStatus = 'PENDIENTE' | 'PAGADO';
 
 export interface Organization {
   id: string;
@@ -20,6 +24,7 @@ export interface Profile {
   created_at: string;
   daily_available_hours: number | null;
   organization_id: string;
+  finance_access: boolean;
 }
 
 export interface Client {
@@ -135,6 +140,77 @@ export interface RecurringTaskOccurrence {
   updated_at: string;
 }
 
+export interface FinanceCategory {
+  id: string;
+  organization_id: string;
+  type: FinanceCategoryType;
+  name: string;
+  created_at: string;
+}
+
+export interface Income {
+  id: string;
+  organization_id: string;
+  date: string;
+  concept: string;
+  client_id: string | null;
+  category_id: string | null;
+  subtotal: number;
+  iva: number;
+  total: number;
+  payment_method: string | null;
+  status: IncomeStatus;
+  due_date: string | null;
+  collected_date: string | null;
+  notes: string | null;
+  created_by: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Expense {
+  id: string;
+  organization_id: string;
+  date: string;
+  concept: string;
+  vendor: string | null;
+  category_id: string | null;
+  subtotal: number;
+  iva: number;
+  total: number;
+  payment_method: string | null;
+  status: ExpenseStatus;
+  due_date: string | null;
+  paid_date: string | null;
+  notes: string | null;
+  created_by: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaxProvision {
+  id: string;
+  organization_id: string;
+  date: string;
+  tax_type: string;
+  period: string;
+  base: number | null;
+  iva_trasladado: number | null;
+  iva_acreditable: number | null;
+  iva_por_pagar: number | null;
+  isr_estimado: number | null;
+  total_provisioned: number;
+  total_paid: number | null;
+  status: TaxProvisionStatus;
+  notes: string | null;
+  created_by: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Minimal Database generic shape for supabase-js typing convenience.
 export interface Database {
   public: {
@@ -159,6 +235,10 @@ export interface Database {
         Insert: Partial<RecurringTaskOccurrence>;
         Update: Partial<RecurringTaskOccurrence>;
       };
+      finance_categories: { Row: FinanceCategory; Insert: Partial<FinanceCategory>; Update: Partial<FinanceCategory> };
+      incomes: { Row: Income; Insert: Partial<Income>; Update: Partial<Income> };
+      expenses: { Row: Expense; Insert: Partial<Expense>; Update: Partial<Expense> };
+      tax_provisions: { Row: TaxProvision; Insert: Partial<TaxProvision>; Update: Partial<TaxProvision> };
     };
   };
 }

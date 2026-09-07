@@ -379,6 +379,88 @@ Rafael's and Gustavo's passwords were reset (via the same `crypt()`-via-SQL tech
 `009_second_organization.sql`) to a temporary password purely so this round's live RLS/isolation
 testing could log in as them — reported to the human out-of-band, not committed anywhere in git.
 
+## Finanzas module (`011_finance_module.sql`)
+
+### Permission model
+The human's spec described "Admin / Finanzas / Usuario" as if they were role tiers, but the app
+already has a meaningful 3-tier role system (`ADMIN`/`PROJECT_MANAGER`/`COLLABORATOR`) governing
+everything else, and finance access is orthogonal to it (a COLLABORATOR might need it, a
+PROJECT_MANAGER might not). Rather than add a 4th role or fork the role enum, this adds
+`profiles.finance_access boolean not null default false`:
+
+- **ADMIN always has full finance access implicitly** — `has_finance_access()` short-circuits on
+  `current_role_is_admin()`, so an ADMIN never needs the flag set.
+- A `PROJECT_MANAGER`/`COLLABORATOR` only gets finance access if `finance_access = true` on their
+  own profile, explicitly granted by an ADMIN.
+- Only ADMIN can toggle another user's `finance_access` (`profiles_update_admin`, unchanged, already
+  covers any column). A user can never grant themselves finance access — `profiles_update_self_name`
+  was extended a third time (after `daily_available_hours` in `006_...` and `organization_id` in
+  `008_...`) to require `finance_access is not distinct from` its current value on any self-update.
+- `has_finance_access()`: `security definer`, same style as `current_role_is_admin()`/
+  `current_org_id()` — `current_role_is_admin() or coalesce(profiles.finance_access, false)`.
+
+### RLS
+| Table | SELECT | INSERT | UPDATE | DELETE |
+|-------|--------|--------|--------|--------|
+| `finance_categories` | org match + `has_finance_access()` | same, + | same | same |
+| `incomes` | org match + `has_finance_access()` | same, + `created_by = auth.uid()` | org match + `has_finance_access()` | org match + `has_finance_access()` |
+| `expenses` | same shape as `incomes` |
+| `tax_provisions` | same shape as `incomes` |
+
+**Delete scope, a judgment call**: the spec doesn't distinguish a narrower delete tier from
+"Finanzas: crear/editar/consultar", so delete is allowed for anyone with finance access (ADMIN
+implicitly, or `finance_access = true`) on their own org's rows — not restricted to ADMIN-only.
+
+`updated_by` is set by application code on every update call (`src/lib/queries.ts`'s
+`updateIncome`/`updateExpense`/`updateTaxProvision` always pass `updated_by: profile.id`) — RLS
+enforces the org+access check on the write itself, not who is credited as the updater, matching how
+`created_at`/`updated_at` timestamps are already handled elsewhere in this app (trusted to
+application code / triggers, not independently re-derived by a policy).
+
+### Live-tested against the real project with real JWTs
+
+1. Hugo (Miselium ADMIN, `finance_access` still `false` — access via role alone) sees "Finanzas" in
+   the sidebar, opens all 7 tabs (Dashboard/Ingresos/Egresos/Impuestos/Cuentas por
+   cobrar/pagar/Analisis) with zero console errors, creates one income, one expense, one tax
+   provision via the UI, confirms Dashboard KPIs compute correctly (Ingresos $1,000, Egresos $400,
+   Gastos $400, Impuestos $150, Utilidad neta $450 = 1000−400−150, Flujo de efectivo $0 since
+   nothing was marked Cobrado/Pagado yet), confirms Cuentas por cobrar/pagar show the pending rows
+   with correct "por vencer" classification, confirms Analisis renders without crashing. All three
+   test rows deleted via the UI afterward; row-count query confirmed `incomes`/`expenses`/
+   `tax_provisions` back to 0.
+2. Gerardo (Miselium COLLABORATOR, `finance_access = false` by default): sidebar does **not** show
+   "Finanzas"; direct navigation to `/app/finanzas` renders the existing `UnauthorizedState`
+   ("No tienes acceso a esta seccion"); direct REST `GET /rest/v1/incomes` returns `200` with an
+   **empty array** (RLS silently filters, same pattern as every other org-scoped table in this app);
+   direct REST `POST /rest/v1/incomes` (valid Miselium `organization_id`, his own `uid` as
+   `created_by`) returned **`403`** — `"new row violates row-level security policy for table
+   \"incomes\""` — confirming the reject is enforced at the DB level, not just hidden in the UI.
+3. Gerardo's `finance_access` was temporarily set to `true` (via SQL) to verify the flag actually
+   works: sidebar now shows "Finanzas", he successfully creates an income within Miselium's org via
+   the UI with zero console errors. Reverted to `false` immediately after; confirmed via a direct
+   profile query — Gerardo's `finance_access` ended the session as `false`. His role, name, and
+   password were never touched.
+4. Cross-org isolation: created a throwaway third organization (`THROWAWAY-TEST-ORG`) and one
+   throwaway ADMIN user in it (same technique as the Fase 2 multi-tenancy round). That user creates
+   an income inside their own org via REST — succeeds (`201`). That same user querying
+   `incomes?organization_id=neq.<their-own-org>` (an attempt to read any other org's rows) gets
+   `200` with **0 rows**. Separately, Hugo (Miselium ADMIN) queries all incomes visible to him and
+   gets **0 rows** — the throwaway org's row is fully invisible to Miselium, confirming isolation in
+   both directions. The throwaway org, its user (`auth.users`/`auth.identities`/`profiles` rows),
+   and its one income row were all deleted immediately after; row-count and content spot-checks
+   confirmed 0 remaining rows anywhere referencing the throwaway org.
+5. Full before/after row-count check across every table (not just the 4 new ones) confirmed no
+   leftover rows anywhere: `organizations` = 2 (unchanged), `profiles` = 5 (unchanged — no
+   throwaway or duplicate rows), `finance_categories` = 34 (17 seeded categories × 2 real orgs,
+   config data, expected to be nonzero), `incomes`/`expenses`/`tax_provisions` = 0 each. Spot-checked
+   `profiles.role`/`daily_available_hours`/`finance_access` for all 5 real users — all match their
+   pre-round values; Rafael's and Gustavo's passwords were not touched this round.
+
+### "Estimacion financiera" / "Provision fiscal" labeling
+Per the spec's explicit requirement, `tax_provisions` is never presented as an official tax filing.
+The Impuestos tab and its create/edit form both show a persistent disclaimer:
+"Estimacion financiera / provision fiscal interna — no constituye una declaracion fiscal oficial."
+
 ## Known limitations / out of scope for weekly recurring tasks
 
 - No background job pre-generates future occurrences — by design, see `DATABASE.md`'s

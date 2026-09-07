@@ -3,6 +3,10 @@ import { supabase } from './supabase';
 import type {
   ActivityLog,
   Client,
+  Expense,
+  FinanceCategory,
+  FinanceCategoryType,
+  Income,
   Notification,
   OccurrenceStatus,
   Profile,
@@ -16,6 +20,7 @@ import type {
   TaskComment,
   TaskPriority,
   TaskStatus,
+  TaxProvision,
   TimeEntry,
 } from '../types/database';
 
@@ -36,6 +41,16 @@ export const updateProfileCapacity = async (id: string, daily_available_hours: n
   const { data, error } = await supabase
     .from('profiles')
     .update({ daily_available_hours })
+    .eq('id', id)
+    .select()
+    .single();
+  return { data: data as Profile | null, error };
+};
+
+export const updateProfileFinanceAccess = async (id: string, finance_access: boolean): Result<Profile> => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ finance_access })
     .eq('id', id)
     .select()
     .single();
@@ -320,3 +335,72 @@ export const setOccurrenceStatus = async (input: {
     .single();
   return { data: data as RecurringTaskOccurrence | null, error };
 };
+
+// ===== Finance: categories =====
+export const fetchFinanceCategories = async (): Result<FinanceCategory[]> => {
+  const { data, error } = await supabase.from('finance_categories').select('*').order('name', { ascending: true });
+  return { data: data as FinanceCategory[] | null, error };
+};
+
+export const createFinanceCategory = async (input: {
+  organization_id: string;
+  type: FinanceCategoryType;
+  name: string;
+}): Result<FinanceCategory> => {
+  const { data, error } = await supabase.from('finance_categories').insert(input).select().single();
+  return { data: data as FinanceCategory | null, error };
+};
+
+// ===== Finance: incomes =====
+export const fetchIncomes = async (): Result<Income[]> => {
+  const { data, error } = await supabase.from('incomes').select('*').order('date', { ascending: false });
+  return { data: data as Income[] | null, error };
+};
+
+export const createIncome = async (input: Partial<Income>): Result<Income> => {
+  const { data, error } = await supabase.from('incomes').insert(input).select().single();
+  return { data: data as Income | null, error };
+};
+
+export const updateIncome = async (id: string, input: Partial<Income>): Result<Income> => {
+  const { data, error } = await supabase.from('incomes').update(input).eq('id', id).select().single();
+  return { data: data as Income | null, error };
+};
+
+export const deleteIncome = (id: string) => supabase.from('incomes').delete().eq('id', id);
+
+// ===== Finance: expenses =====
+export const fetchExpenses = async (): Result<Expense[]> => {
+  const { data, error } = await supabase.from('expenses').select('*').order('date', { ascending: false });
+  return { data: data as Expense[] | null, error };
+};
+
+export const createExpense = async (input: Partial<Expense>): Result<Expense> => {
+  const { data, error } = await supabase.from('expenses').insert(input).select().single();
+  return { data: data as Expense | null, error };
+};
+
+export const updateExpense = async (id: string, input: Partial<Expense>): Result<Expense> => {
+  const { data, error } = await supabase.from('expenses').update(input).eq('id', id).select().single();
+  return { data: data as Expense | null, error };
+};
+
+export const deleteExpense = (id: string) => supabase.from('expenses').delete().eq('id', id);
+
+// ===== Finance: tax provisions =====
+export const fetchTaxProvisions = async (): Result<TaxProvision[]> => {
+  const { data, error } = await supabase.from('tax_provisions').select('*').order('date', { ascending: false });
+  return { data: data as TaxProvision[] | null, error };
+};
+
+export const createTaxProvision = async (input: Partial<TaxProvision>): Result<TaxProvision> => {
+  const { data, error } = await supabase.from('tax_provisions').insert(input).select().single();
+  return { data: data as TaxProvision | null, error };
+};
+
+export const updateTaxProvision = async (id: string, input: Partial<TaxProvision>): Result<TaxProvision> => {
+  const { data, error } = await supabase.from('tax_provisions').update(input).eq('id', id).select().single();
+  return { data: data as TaxProvision | null, error };
+};
+
+export const deleteTaxProvision = (id: string) => supabase.from('tax_provisions').delete().eq('id', id);

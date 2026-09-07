@@ -17,6 +17,10 @@ interface AuthContextValue {
    *  current_role_is_admin_or_pm() in 008_org_scoped_rls.sql. Does NOT cover the
    *  ADMIN-only slice (changing a user's role or daily_available_hours). */
   canManage: boolean;
+  /** ADMIN (implicit) or profile.finance_access = true. Mirrors the DB helper
+   *  has_finance_access() in 011_finance_module.sql. Gates the Finanzas nav
+   *  item and pages client-side; RLS is the real enforcement. */
+  hasFinanceAccess: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -97,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin,
     isProjectManager,
     canManage: isAdmin || isProjectManager,
+    hasFinanceAccess: isAdmin || !!profile?.finance_access,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

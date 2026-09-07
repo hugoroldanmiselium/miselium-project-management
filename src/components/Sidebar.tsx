@@ -6,6 +6,7 @@ import {
   ListChecks,
   Users,
   UsersRound,
+  Wallet,
   Settings,
   LogOut,
 } from 'lucide-react';
@@ -21,7 +22,10 @@ const navItems = [
 ];
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { signOut } = useAuth();
+  const { signOut, hasFinanceAccess } = useAuth();
+  const items = hasFinanceAccess
+    ? [...navItems, { to: '/app/finanzas', label: 'Finanzas', icon: Wallet }]
+    : navItems;
 
   return (
     <>
@@ -32,7 +36,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           <div className="wordmark-sub">Operations</div>
         </div>
         <nav className="sidebar-nav">
-          {navItems.map((item) => (
+          {items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

@@ -333,10 +333,100 @@ recurring occurrences alongside today's due project tasks, with a small "⚠️ 
 when the total exceeds `daily_available_hours`. Purely additive to the existing minimal aggregate
 display — not a new scheduling/workload system, per the spec.
 
+## Finanzas module (`011_finance_module.sql`)
+
+Per-organization finance tracking: ingresos, egresos, provisiones fiscales, plus categories shared
+by ingresos/egresos. Deliberately NOT double-entry bookkeeping, NOT CFDI/SAT integration, NOT an
+official tax filing — see `SECURITY.md` for the permission model writeup.
+
+### `profiles.finance_access`
+`boolean not null default false`. Orthogonal to the 3-tier role system (`ADMIN`/`PROJECT_MANAGER`/
+`COLLABORATOR`) rather than a 4th tier: an `ADMIN` always has implicit full finance access (no flag
+needed); a `PROJECT_MANAGER`/`COLLABORATOR` only has it if explicitly granted. Guarded the same way
+`role`/`daily_available_hours`/`organization_id` already are on `profiles_update_self_name` (see
+`006_task_estimation_capacity.sql`, `008_org_scoped_rls.sql`) — a user can never grant themselves
+finance access while renaming themselves.
+
+### `finance_categories`
+| column | type | notes |
+|--------|------|-------|
+| id | uuid PK |
+| organization_id | uuid FK → organizations.id, not null |
+| type | text | `'INCOME'\|'EXPENSE'`, checked |
+| name | text, not null |
+| created_at | timestamptz |
+
+Unique `(organization_id, type, name)`. Seeded for both existing real organizations (Miselium, RD
+Consultorio Fiscal) directly in the migration — category **labels** are structural/config data, not
+fabricated financial data, so seeding them for real orgs is fine (no rows are created in
+incomes/expenses/tax_provisions). Users can add more inline from the ingreso/egreso form ("+ nueva
+categoria").
+
+### `incomes` (ingresos)
+| column | type | notes |
+|--------|------|-------|
+| id | uuid PK |
+| organization_id | uuid FK → organizations.id, not null |
+| date | date, not null |
+| concept | text, not null |
+| client_id | uuid FK → clients.id, nullable |
+| category_id | uuid FK → finance_categories.id, nullable |
+| subtotal / iva / total | numeric(12,2) | `total` is subtotal+iva, computed client-side (not a generated column) |
+| payment_method | text, nullable |
+| status | text | `'COBRADO'\|'PENDIENTE'`, checked, default `'PENDIENTE'` |
+| due_date | date, nullable | **judgment call**: not in the human's literal field list for section 2, but required for the Cuentas por cobrar view (section 6) to compute "dias pendientes"/vencido — added here rather than inventing a separate table |
+| collected_date | date, nullable |
+| notes | text, nullable |
+| created_by | uuid FK → profiles.id, not null |
+| updated_by | uuid FK → profiles.id, nullable — set by application code on every update (RLS enforces org+access on the write, not who set this column) |
+| created_at / updated_at | timestamptz | `updated_at` auto-updated via the existing `set_updated_at()` trigger |
+
+### `expenses` (egresos)
+Same shape as `incomes`, with `vendor` (plain text, no vendor entity/table) instead of `client_id`,
+and `status` `'PAGADO'|'PENDIENTE'` / `paid_date` instead of `'COBRADO'`/`collected_date`.
+
+**"Gastos" (section 4 of the spec) is not a separate table** — it's an analysis of `expenses`
+grouped by `category_id`, computed client-side (`src/lib/financeUtils.ts`'s `groupExpensesByCategory`)
+and rendered in Finanzas > Analisis. A duplicate table would just be `expenses` with an extra join,
+so it was folded into the existing table per the "don't over-engineer" instruction.
+
+### `tax_provisions` (impuestos)
+| column | type | notes |
+|--------|------|-------|
+| id | uuid PK |
+| organization_id | uuid FK → organizations.id, not null |
+| date | date, not null |
+| tax_type | text, not null |
+| period | text, not null | free text (e.g. `'2026-09'`) rather than a date, to allow non-monthly periods without over-constraining |
+| base / iva_trasladado / iva_acreditable / iva_por_pagar / isr_estimado | numeric(12,2), nullable |
+| total_provisioned | numeric(12,2), not null |
+| total_paid | numeric(12,2), nullable, default 0 |
+| status | text | `'PENDIENTE'\|'PAGADO'`, checked, default `'PENDIENTE'` |
+| notes | text, nullable |
+| created_by / updated_by | uuid FK → profiles.id |
+| created_at / updated_at | timestamptz |
+
+Labeled "Estimacion financiera / Provision fiscal" everywhere it appears in the UI — explicitly
+never presented as an official SAT declaration, per the spec's requirement.
+
+### Cuentas por cobrar / por pagar
+**Not separate tables.** They are `incomes`/`expenses` filtered to `status = 'PENDIENTE'`, with
+"dias pendientes" computed client-side from `due_date` vs. today (`src/lib/financeUtils.ts`'s
+`daysPending`/`isOverdueDate`, mirroring the string-safe date arithmetic conventions already
+established in `src/lib/recurringDates.ts` for recurring tasks — never `new Date(dateString)` on a
+DB date, to avoid local-timezone off-by-one-day bugs).
+
+### RLS (see `SECURITY.md` for the full policy text and live verification)
+Every finance table is scoped by both `organization_id = current_org_id()` **and** a new
+`has_finance_access()` security-definer helper. Delete permission was deliberately **not**
+restricted to ADMIN-only beyond what finance access already implies — anyone with finance access
+(ADMIN implicitly, or `finance_access = true`) can delete their own org's finance rows, since the
+spec's "Finanzas: crear/editar/consultar" grant doesn't carve out a narrower delete tier.
+
 ## Re-running migrations
 
 If the schema needs to be reapplied (e.g. against a fresh Supabase project), run the SQL files in
-order (`001` through `010`) against the Management API SQL endpoint:
+order (`001` through `011`) against the Management API SQL endpoint:
 
 ```bash
 curl -s -X POST \
@@ -348,7 +438,7 @@ curl -s -X POST \
 
 (repeat for `002_rls.sql`, then `003_seed.sql`, `004_replace_demo_users.sql`, `005_agency_features.sql`,
 `006_task_estimation_capacity.sql`, `007_organizations_and_role_tiers.sql`, `008_org_scoped_rls.sql`,
-`009_second_organization.sql`, `010_recurring_tasks.sql`, in order). All files are idempotent-ish — schema uses
+`009_second_organization.sql`, `010_recurring_tasks.sql`, `011_finance_module.sql`, in order). All files are idempotent-ish — schema uses
 `create table if not exists` / `create index if not exists`, RLS policies use `drop policy if
 exists` before `create policy`, and seed inserts guard with `where not exists (...)` — so they
 can be safely re-run without duplicating data (though re-running against a project that already

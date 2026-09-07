@@ -10,6 +10,7 @@ import {
   fetchTasks,
   fetchTimeEntries,
   updateProfileCapacity,
+  updateProfileFinanceAccess,
   updateProfileRole,
 } from '../lib/queries';
 import { LoadingState, ErrorState, EmptyState } from '../components/States';
@@ -32,6 +33,7 @@ export function Team() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [capacityDrafts, setCapacityDrafts] = useState<Record<string, string>>({});
   const [capacityPendingId, setCapacityPendingId] = useState<string | null>(null);
+  const [financePendingId, setFinancePendingId] = useState<string | null>(null);
 
   const { data: profiles, loading, error, refetch } = useSupabaseQuery(() => fetchProfiles());
   const { data: projects } = useSupabaseQuery(() => fetchProjects());
@@ -150,6 +152,13 @@ export function Team() {
     refetch();
   }
 
+  async function handleFinanceAccessChange(userId: string, financeAccess: boolean) {
+    setFinancePendingId(userId);
+    await updateProfileFinanceAccess(userId, financeAccess);
+    setFinancePendingId(null);
+    refetch();
+  }
+
   const columns: Column<Profile>[] = [
     {
       header: 'Nombre',
@@ -205,6 +214,24 @@ export function Team() {
           />
         ) : (
           <span>{p.daily_available_hours != null ? `${p.daily_available_hours} h/día` : '—'}</span>
+        ),
+    },
+    {
+      header: 'Acceso a finanzas',
+      key: 'financeAccess',
+      render: (p) =>
+        p.role === 'ADMIN' ? (
+          <span className="text-small text-muted">Admin (siempre)</span>
+        ) : isAdmin ? (
+          <input
+            type="checkbox"
+            checked={p.finance_access}
+            disabled={financePendingId === p.id}
+            onChange={(e) => handleFinanceAccessChange(p.id, e.target.checked)}
+            title="Otorgar acceso al modulo de Finanzas"
+          />
+        ) : (
+          <span className="text-small text-muted">{p.finance_access ? 'Si' : 'No'}</span>
         ),
     },
     {
